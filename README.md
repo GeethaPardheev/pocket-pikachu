@@ -1,16 +1,14 @@
 # Pocket Pikachu ⚡
 
-An ultra-realistic Pikachu desk companion for macOS. It types alongside you, plays ball, dances, fires Thunderbolt, naps, and reminds you to focus, stretch and walk. Clicking it never opens a window.
+A realistic Pikachu that lives on your Mac desktop. It types along with you, plays ball, dances, fires Thunderbolt, naps, and reminds you to focus, stretch and walk. Clicking it never opens a window.
 
-**Author: Geetha Pardheev**
-
-Built on the desk-pet companion originally written by Gopal Goyal and Saksham Batta; see [AUTHORS.md](AUTHORS.md).
+**Author: Geetha Pardheev.** Built on the desk-pet companion originally written by Gopal Goyal and Saksham Batta; see [AUTHORS.md](AUTHORS.md).
 
 ## Requirements
 
-- macOS 13 or later. Developed and tested on Apple Silicon; the build script targets the current Mac's architecture. Intel builds have not been tested.
-- Apple Xcode Command Line Tools (`xcode-select --install`).
-- No third-party packages, API keys, accounts, or network services are needed at runtime.
+- macOS 13 or later. Built and tested on Apple Silicon; Intel is untested.
+- Xcode Command Line Tools (`xcode-select --install`).
+- Nothing else. The pet needs no accounts, keys or network. The built-in terminals use the Python and WebKit that ship with macOS.
 
 ## Build and run
 
@@ -21,157 +19,121 @@ cd pocket-pikachu
 ./scripts/run.sh
 ```
 
-You can also double-click `build/Pocket Pikachu.app` in Finder. The app appears as a floating Pikachu with a paw icon in the menu bar, without a Dock icon. Keep the full app bundle together. Quit an existing copy before rebuilding or running a copy from another location.
+Or double-click `build/Pocket Pikachu.app`. Pikachu floats on the desktop with a paw icon in the menu bar and no Dock icon. Keep the app bundle together, and quit a running copy before rebuilding. The build is ad-hoc signed, not notarized, so macOS may ask you to renew the Accessibility permission after a rebuild or a move.
 
-The script compiles Swift against AppKit, ApplicationServices, and CoreAudio, packages all sprite frames, and applies a local ad-hoc signature. This is not a notarized distribution. Building on your own Mac is the supported setup; downloaded binaries may require macOS approval.
+## Typing detection (optional)
 
-To rebuild after changes, quit Pikachu, run `./scripts/build.sh`, then `./scripts/run.sh`. macOS may require renewing Accessibility permission after a rebuild or moving the app.
+Pikachu taps along when you type. That needs Accessibility permission:
 
-## Enable typing detection
+1. Right-click Pikachu, keep **Typing reactions** on, and choose **Open keyboard permission settings…**.
+2. In Privacy & Security → Accessibility, add the exact `build/Pocket Pikachu.app` you launched and turn it on.
+3. Type anywhere. The menu shows whether permission is missing, waiting for keys, or receiving keys.
 
-1. Right-click Pikachu and leave **Typing reactions** checked.
-2. Choose **Open keyboard permission settings…**.
-3. In System Settings → Privacy & Security → Accessibility, add the exact `build/Pocket Pikachu.app` you launched and enable it.
-4. Type in a normal text editor. The menu's typing status indicates whether permission is missing, it is waiting for keys, or it has received keys.
+If it still says permission is needed after a rebuild, remove the old entry and add the new one. **Preview typing** shows the animation without permission. Password fields may not report keys. The app only learns that a key was pressed, never which one.
 
-Permission is checked every second. Relaunch if macOS requests it. If the switch is on but the menu still says permission is needed, remove the old Accessibility entry with **−**, add the current app with **+**, and enable it. A prior build's authorization may no longer match.
+## What Pikachu does
 
-**Preview typing** tests the animation without keyboard permission. Secure-input/password fields may suppress keyboard events. “Receiving keys” means this session has received keyboard activity, not necessarily that keys are being pressed at that instant.
+Everything is in the right-click menu, or under the paw in the menu bar.
 
-## Features and controls
+**Play**
 
-Right-click Pikachu or click the menu-bar paw to access all controls.
+- **Play ball.** A Poké Ball appears at its paws. Pikachu swats it, the ball rolls off spinning and slowing down, and Pikachu gallops after it. Five to seven rolls per game, each 20–30% of the screen width in a random direction, then it trots back to exactly where it started. Dragging Pikachu or starting a focus session ends the game.
+- **Fun dance.** Eight seconds of bouncing through every pose in the sprite set.
+- **Thunderbolt.** A two-second attack with a “Pika… CHUUU!” caption.
+- **Play with cursor.** A short chase toward the pointer. Pikachu also does this on its own when the cursor moves nearby, at most once every 75 seconds. **Occasional cursor play** turns that off.
+- **Give a fish treat.** A fish appears; click it and Pikachu pounces on it and comes back. Uneaten fish vanish after 20 seconds.
+- **Pet Pocket Pikachu**, or rub the pointer over its head, for closed eyes and a heart.
+- **Wave**, **Jump**, **Thinking.** One-off animations. A single click waves, a double-click jumps, and dragging moves it. The position is saved.
 
-- **Cursor tracking:** the Pikachu sprite set has no head-turn frames, so Pikachu idles and blinks instead of following the cursor. The tracking code and the Pause cursor following toggle remain for sprite sets that include the sixteen gaze frames.
-- **Typing:** alternating paws and a little keyboard; faster typing produces faster taps and “Turbo paws”. Returns to normal after 0.7 seconds without detected keys. Typing interrupts temporary petting/stretch animations and appears during focus; a short active chase/pounce finishes first.
-- **Click and drag:** click to wave, double-click to jump, drag to reposition. Position is saved. Small, Large, Extra large and Huge change size for this session; Reset position brings Pikachu to the visible screen.
-- **Petting:** rub the pointer across its head for closed eyes and a heart. Pet Pocket Pikachu triggers it manually.
-- **Treats:** Give a fish treat, then click the fish for a short pounce and return. Unused fish disappear after 20 seconds.
-- **Sleep:** automatic nap after 3 minutes without mouse movement or detected typing; movement/typing wakes it. Nap now is available. Music mode prevents automatic idle naps.
-- **Cursor play:** occasional short chases when the moving cursor is nearby, with at least 75 seconds between automatic attempts. Disable Occasional cursor play or trigger Play with cursor manually.
-- **Fun dance:** an eight-second dance that bounces and sways through every action pose in the sprite set, from the menu.
-- **Thunderbolt:** plays sprite row 8 for about two seconds with a “Pika… CHUUU!” caption, from the menu.
-- **Play ball:** a red-and-white Poké Ball-style ball sits at Pikachu's paws. Pikachu swats it, the ball rolls off spinning and slowing to a stop, and Pikachu runs after it while it is still rolling. This repeats five to seven times (random per game); each roll covers 20–30% of the screen width in a random direction that stays on screen, so the path wanders like a screensaver. Then Pikachu trots straight back to exactly where it started and the ball disappears. The cat moves at a steady pace, so longer runs take longer, up to 4 seconds. Dragging Pikachu or starting focus ends the game where it stands.
-- **Focus reminders:** enabled by default, every 30 minutes while running. “Hey. Time to focus.” displays for 30 seconds with a brief attention animation (sprite row 8). Skipped while a focus session is already running. Preview focus reminder triggers it immediately. Toggle in the menu.
-- **Walking reminders:** enabled by default, every 20 minutes while running. “Stand up & take a short walk” displays for 30 seconds, including during focus and pet naps. Preview walk reminder triggers it immediately. Toggle reminders in the menu.
-- **Stretch reminders:** every 30 minutes while awake, with a brief paw-up animation. Focus and sleep defer these reminders. Stretch now is available.
-- **Focus:** start 25-minute or 5-minute sessions, or try a 10-second preview. Pikachu naps, shows a countdown, and jumps when done. Cancel from the menu.
-- **Homes:** choose a cushion, cardboard box, or no home. Pikachu settles lower in its box during sleep/petting.
-- **Headphones:** automatic mode checks whether the default audio output device is active. It cannot distinguish music from notifications, silent streams, or apps keeping audio open. Manual music mode works with any player. Head bobbing is decorative, not synchronized to beats. The headphone drawing positions were fitted to the original cat sprites and may sit oddly on Pikachu.
-- **Sounds:** optional synthesized purr and completion/reminder chime. Sounds and purring is off by default.
+**Reminders** (on by default, each with a toggle and a preview in the menu)
 
-## Timing, preferences, and limitations
+- **Focus**, every 30 minutes: “Hey. Time to focus.” for 30 seconds, with a Thunderbolt. Skipped while a focus session is running.
+- **Walk**, every 20 minutes: “Stand up & take a short walk” for 30 seconds, even during focus or naps.
+- **Stretch**, every 30 minutes while awake, with a paw-up stretch. Deferred during focus and sleep. **Stretch now** triggers it.
 
-The companion must be running for reminders. There are no scheduled background jobs or automatic login startup items. Restarting begins fresh countdowns; missed walk reminders do not queue up. Re-enabling walk reminders starts a fresh 20 minutes; re-enabling focus reminders starts a fresh 30 minutes. Focus timing uses system uptime and is not intended as an alarm while the Mac is asleep.
+**Focus timer.** Start a 25-minute or 5-minute session, or a 10-second preview. Pikachu naps with a countdown and jumps when it ends. Cancel from the menu.
 
-Position, typing toggle, automatic nap/play/reminder toggles, sound preference, home, and automatic audio mode use macOS UserDefaults. Size, manual headphones, cursor pause, and active focus timers are session-only.
+**Everyday behaviour**
 
-If Pikachu is hidden, use **paw menu → Reset position**. If you see two Pikachus, quit the other standalone copy. This app currently has no single-instance enforcement across different bundle copies.
+- **Typing.** Alternating paws on a little keyboard; faster typing means faster taps and “Turbo paws”. Stops 0.7 seconds after the last key.
+- **Naps** after 3 minutes without mouse or keyboard activity; any movement wakes it. **Nap now** forces one. Music mode prevents automatic naps.
+- **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
+- **Headphones.** Appear automatically while your Mac is playing audio (it can't tell music from notifications), or manually via music mode. The cups were positioned for the original cat sprites and can sit oddly on Pikachu.
+- **Sounds.** Optional purr and chime, off by default.
+- **Size.** Small, Large, Extra large, Huge. Size lasts for the session. **Reset position** brings Pikachu back on screen.
+- **Cursor tracking.** This sprite set has no head-turn frames, so Pikachu idles and blinks instead of following the pointer. The code and the **Pause cursor following** toggle remain for sprite sets that include the sixteen gaze frames.
+
+## Good to know
+
+- Reminders fire only while the app is running. There are no background jobs or login items, and restarting resets every countdown. Focus timing uses system uptime, so it is not an alarm while the Mac sleeps.
+- Saved between launches: position, typing toggle, nap, play and reminder toggles, sounds, home, automatic headphones. Session only: size, manual headphones, cursor pause, a running focus timer.
+- Two Pikachus means two copies are running; quit one. There is no single-instance check.
 
 ## Privacy
 
-The keyboard handlers observe event timing only: they do not read characters/key codes, record typed text, or send it anywhere. Turning typing reactions off removes the keyboard monitors. Cursor tracking reads pointer coordinates. Audio detection reads device-running state; it does not use the microphone or record audio. Preferences stay on the Mac. Runtime code does not make network requests.
+The keyboard monitors see timing only, never characters or key codes, and turning typing reactions off removes them. Cursor tracking reads the pointer position. Audio detection reads whether the output device is active; no microphone, no recording. Preferences stay on the Mac. The pet itself makes no network requests. Only the optional voice feature below talks to Google, and only while you have turned it on.
 
-## Tests and visual preview
+## Terminal notifications (zsh, optional)
 
-```bash
-./scripts/test.sh
-"build/Pocket Pikachu.app/Contents/MacOS/PocketPikachu" --render-gallery "$PWD/build/features-preview.png"
-```
-
-Tests cover the sixteen gaze directions, compass/deadzone cases, typing expiry and cadence/storage, sleep/wake, focus completion, reminder timing and disabled behavior, excursion return, ball-game run counting and return home, and sprite availability. `"build/Pocket Pikachu.app/Contents/MacOS/PocketPikachu" --play-smoke` runs a real ball game, dance, and focus reminder in the live app loop and checks Pikachu returns to its starting point; it briefly shows a second cat. Gallery rendering requires a logged-in macOS GUI session. Real cross-app typing requires user-granted Accessibility permission; deterministic tests do not prove that system permission is granted.
-
-Optional startup diagnostics (no typed text):
-
-```bash
-# Quit the running Pikachu first.
-open "build/Pocket Pikachu.app" --args --diagnostics "$PWD/build/typing-diagnostics.txt"
-```
-
-This records permission, enabled state, and monitor installation at startup; it is not a live-updating report.
-
-## Source layout
-
-- `Sources/main.swift`: native AppKit window, rendering, input monitoring, behavior state, audio-state detection, and self-tests.
-- `Resources/frames/`: the 73 Pikachu frames, named `row-col.png`: row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, and rows 9–10 (gaze slots) that reuse idle frames.
-- `Resources/Info.plist`: application metadata.
-- `scripts/`: reproducible build, run, and test commands.
-
-Build products, local diagnostics, temporary generation files, and caches are excluded from version control.
-
-## Artwork and trademark
-
-The Pikachu frames were generated with Google's Gemini image model from a community-made Codex pet as the pose reference, then chroma-keyed and sliced into the sprite grid. Pikachu is a trademark of Nintendo, Game Freak and The Pokémon Company. This is an unofficial fan project for personal desktop use and is not affiliated with or endorsed by them.
-
-See [AUTHORS.md](AUTHORS.md) for credits.
-
-## Contribution and approval policy
-
-All changes to `main` require a pull request, code-owner approval, passing macOS checks, and resolved review conversations. Direct pushes, force pushes, and branch deletion are blocked by repository protection, including for administrators. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
-
-This repository is publicly readable; public visibility permits viewing and forking, not editing this repository. Its owner can manage access and change protection settings. No open-source license has been selected for this project.
-
-## Terminal notifications (zsh)
-
-Source the integration from your `~/.zshrc`, using the absolute path to this checkout:
+Add this line to `~/.zshrc`, then open a new tab or source it in the current one:
 
 ```zsh
 source /absolute/path/to/pocket-pikachu/integrations/pocket-pikachu.zsh
 ```
 
-Open a new terminal tab, or run that source command in an existing zsh tab. This works in IDE terminals that start interactive zsh and load that configuration, as well as standalone terminals. Bash, fish, remote hosts, containers, and IDE task runners that do not load this shell configuration are not automatically covered.
+It works in any interactive zsh, including IDE terminals that load your zshrc. Bash, fish, remote hosts and containers are not covered.
 
-Failures are reported when the shell returns to its prompt. Successful commands are reported if they ran for at least three seconds. For explicit input/approval requests, run `pika-help` before the waiting operation. Arbitrary prompts are not inferred from terminal output. A foreground command still running cannot automatically report its own need for input unless it explicitly integrates this signal.
-
-Pikachu displays an alert for 12 seconds and retains the latest 12 alerts under Recent terminal activity. Terminal notifications can be disabled in its menu. Alerts identify the terminal device (for example ttys001); exact IDE-tab activation is not implemented.
-
-Only event kind, numeric exit code, elapsed seconds, timestamp, terminal device label, and coarse terminal application category are written locally. No command text, arguments, working directory, terminal output, or credentials are captured. Events use private files under `~/Library/Application Support/PocketPikachu/events`, overwritten per shell process. The companion reads bounded files once per second and ignores stale events. Very rapid events from the same shell can be coalesced. This is a local convenience notification channel, not a security audit log; another process running as your user can write to it.
-
-Try `sleep 3`, then `false`, then `pika-help`. To uninstall, remove the source line from `.zshrc` and start fresh terminal tabs. Existing tabs retain their hooks until closed. The integration does not execute commands on your behalf.
+- A failed command, or a successful one that ran 3 seconds or more, shows a 12-second alert on Pikachu. The last 12 appear under **Recent terminal activity**. **Terminal notifications** turns them off.
+- Run `pika-help` before a command that will wait for you to get a “needs your help” alert. Prompts are not detected automatically.
+- Only the event kind, exit code, duration, timestamp, tty name and terminal type are written, to private files under `~/Library/Application Support/PocketPikachu/events`. No command text, paths or output. Any process running as you could write there too, so treat it as a convenience, not an audit log.
+- Try `sleep 3`, then `false`, then `pika-help`. To remove it, delete the line and open fresh tabs.
 
 ## Terminals above the pet
 
-The Agent Desk, process scan, connected-agent cards, and personal-assistant/AI chat have been removed. Terminal Desk stays closed until you choose **Open terminals** from the right-click or paw menu; clicking Pikachu never opens a window. It appears above the pet. The title shows the number of open tabs. Each tab is an independent terminal; switch tabs to view its output.
+**Open terminals** in the menu opens Terminal Desk, a window of zsh tabs above Pikachu. It never opens at launch or on click.
 
-- Type `claude` normally, just as in another terminal. No special launcher is needed for using Claude here.
-- **+ Terminal** starts another independent zsh session in your home folder.
-- **+ In folder…** lets you choose the working directory for a new tab.
-- Drag a window edge to resize, or click **Expand** to zoom. Shell rows/columns update with the view.
-- Use the tabs to switch between sessions. **Copy** copies selected terminal text; **Paste** uses the terminal's paste handling.
-- Closing the terminal window hides it and keeps sessions running. Use **Open terminals** to reopen it.
-- **End tab** asks before closing its shell. Quitting the pet closes all of its terminal sessions. Commands may be interrupted; save your work first.
+- **+ Terminal** starts a shell in your home folder; **+ In folder…** lets you pick one. **End tab** asks before closing a shell. **Expand**, **Copy** and **Paste** do what they say, and you can drag the edges to resize.
+- Closing the window hides it and keeps the shells running; **Open terminals** brings it back. Quitting Pikachu ends all of its shells, so save your work first.
+- These are real shells with your normal permissions. Type `claude` here like anywhere else; nothing is auto-approved or typed for you. Scrollback is 3,000 lines, in memory only.
+- Rendering uses bundled xterm.js 5.5.0 and addon-fit 0.10.0 (MIT, licenses in `Resources/terminal`) and a local Python PTY helper over pipes. No network.
 
-This is an interactive zsh terminal, not an AI command interpreter. Commands you type have your normal account access and run immediately, just like a normal terminal. The app neither auto-approves Claude prompts nor supplies commands on your behalf. Your ordinary shell startup files and history settings apply. Embedded terminal scrollback stays in memory (3,000 lines); it is not added to a separate pet transcript. Existing optional pikachu-claude launcher sessions still work separately.
+## Voice control of the terminals (Gemini Live, optional)
 
-Rendering uses locally bundled xterm.js 5.5.0 and addon-fit 0.10.0, with their MIT licenses in Resources/terminal. No CDN or local network server is used. A Python helper owns each pseudo-terminal over private process pipes. The web view is limited to its bundled page, blocks network content, and receives output as bytes rather than HTML. Python and WebKit are needed at runtime, in addition to the macOS requirements above.
+Click **Voice** under Pikachu or in Terminal Desk. Enter a Gemini API key, which is stored only in macOS Keychain and removable with **Forget saved key**. Keep the suggested Live model (`gemini-3.1-flash-live-preview`), click **Start voice**, and allow the microphone. Google API billing applies; a consumer Gemini subscription is not an API key.
 
-Tests: `PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/test_terminal_host.py` verifies shell execution, resize, Ctrl-C, tab isolation, and shutdown using harmless commands. A logged-in GUI session can run `"build/Pocket Pikachu.app/Contents/MacOS/PocketPikachu" --terminal-smoke "$PWD/build/terminal-preview.png"` to verify real shell output reaches the embedded renderer. These tests require PTY access.
+Say things like “List my terminals”, “Create a new terminal”, “In terminal 2, type claude and press Enter”, “Send Control-C to terminal 2”, or “Press Escape in terminal 2”. Terminal IDs are the numbers on the tab labels.
 
-## Gemini Live voice for pet terminals
+- It can list and create Pikachu's own terminals, type one line (up to 16 KB, no control characters) with or without Enter, and send Ctrl-C or Escape. Nothing else: no other windows, files or settings.
+- **Allow voice to control this pet's terminals** and **Share recent pet terminal output with Gemini** are on by default and can be turned off in settings (⚙). Sharing sends changed screen snapshots every 4 seconds, up to 8 tabs, the last 60 lines and 4,000 characters each. That can include private text.
+- **Mute** stops sending audio. **End**, **Stop**, saying “hang up”, or quitting the app disconnects. Nothing listens at launch. Audio and transcripts are not saved and there is no chat window. While connected, your audio, transcripts, tool calls and terminal snapshots go to Google under Google's data policies.
+- Spoken commands run with your normal permissions, so watch the terminal. Gemini asks when a target or a destructive command is unclear. Duplicate or cancelled tool calls are ignored.
+- Under the hood: AVAudioEngine and a WebSocket to Google's Live API, 16-bit PCM in and 24 kHz out. If audio fails to start it retries without echo cancellation; use headphones then. Reconnect by hand after a dropped session.
 
-Click **Voice** in Terminal Desk. Enter a Gemini API key in the secure field (never in source code or chat), keep the suggested Live model or enter one available to your account, and click **Start voice**. Grant macOS microphone permission when asked. The key is saved in macOS Keychain, not preferences, source, or logs. Use **Forget saved key** in voice settings to remove it. macOS may request Keychain access after an app update. Google API billing/quota applies; a consumer Gemini subscription is not automatically an API credential.
+## Tests
 
-To allow actions, enable **Allow voice to control this pet’s terminals**. Try:
+```bash
+./scripts/test.sh
+PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/test_terminal_host.py
+```
 
-- “List my terminals.”
-- “Create a new terminal.”
-- “In terminal 2, type claude and press Enter.”
-- “Send hello to terminal 2 without pressing Enter.”
-- “Send Control-C to terminal 2.”
-- “Press Escape in terminal 2.”
+The self-tests cover gaze directions, typing cadence, sleep and wake, focus, reminder timing, chase return, ball-game run counting and return home, and that every frame exists. From a logged-in session the app binary at `build/Pocket Pikachu.app/Contents/MacOS/PocketPikachu` also accepts:
 
-IDs are the stable numbers shown in the tab labels for this app run. New tabs start in your home directory. Only ready, running tabs created by the pet can receive input. Input is a single line, up to 16 KB; control characters are rejected except the separately implemented Enter and interrupt keys. A queued input result does not mean its command succeeded. Claude-specific interactive prompts remain Claude’s responsibility; the voice feature does not auto-approve them. Commands spoken and submitted have your normal terminal permissions. Watch the selected terminal to see actions and their output. Disable terminal control when only chatting.
+- `--play-smoke`: plays a real ball game, dance and reminder and checks that Pikachu comes home. It shows a second Pikachu briefly.
+- `--terminal-smoke out.png` and `--voice-tool-smoke`: exercise the terminals and voice tool routing. No Gemini request, no microphone.
+- `--render-gallery out.png` and `--diagnostics file.txt`: a frame gallery, and permission and monitor state at startup.
 
-**Mute** stops sending microphone chunks while leaving the connection/audio engine open; **Stop** disconnects and releases audio capture/playback. Closing settings leaves voice running in the pet bar. **End**, the **Stop** button, saying “hang up”, or quitting the pet stops voice. No background listening starts at launch. Talking over Gemini clears its queued reply audio when the server reports interruption. Use headphones if your audio device's echo cancellation is unavailable. Reconnect after session expiry or device/network failures; session resumption is not implemented.
+None of these prove that macOS has granted Accessibility; only you can check that.
 
-Scope is intentionally limited to listing/creating pet terminals, sending requested text, and Ctrl-C/Escape. It has no access to external terminal windows, files, or pet configuration. With **Share recent pet terminal output with Gemini** enabled, changed snapshots are sent every four seconds: up to eight tabs, the last 60 rendered lines and at most 4,000 characters per tab. This can include private terminal text; disable sharing to stop future snapshots (already sent context remains in the current session). Snapshots may be truncated or stale. Terminal context is untrusted data and cannot authorize commands. The voice stream, transcription, tool definitions, terminal IDs/folder labels, and tool results are exchanged with Google while connected. Audio/transcripts are not saved to disk; there is no conversation UI. Google's service data policies still apply. The app keeps a per-session tool-call cache so duplicate IDs do not repeat actions and ignores cancelled or post-disconnect calls.
+## Source layout
 
-Implementation: native AVAudioEngine microphone/playback and an ephemeral URLSession WebSocket to Google's Live API. Sends 16-bit PCM at the input device's reported rate (Gemini supports resampling) and plays 24 kHz PCM replies. Uses `gemini-3.1-flash-live-preview` by default; preview availability can change. No extra package or server is required.
+- `Sources/main.swift`: window, drawing, input monitoring, behaviour, terminals, self-tests. `Sources/GeminiVoice.swift`: voice.
+- `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9–10 gaze slots that reuse idle.
+- `Resources/terminal/`: the xterm.js page and Python PTY helper. `integrations/`: the zsh hook and the `pikachu-claude` launcher. `scripts/`: build, run, test.
 
-Validation: native build/self-tests include tool argument validation. `"build/Pocket Pikachu.app/Contents/MacOS/PocketPikachu" --voice-tool-smoke` uses synthetic model calls and real owned shell tabs to test disabled control, stable target routing, duplicate suppression, actual shell delivery, cancellation, and the stop gate. It makes no Gemini request and does not open the microphone. Live authentication, speech recognition, microphone hardware, and reply playback require testing with your key and devices.
+## Artwork and trademark
 
-Protocol references: [Google Live WebSocket reference](https://ai.google.dev/api/live) and [Live API capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities).
+The frames were generated with Google's Gemini image model, using a community Codex pet as the pose reference, then chroma-keyed and sliced into the sprite grid. Pikachu is a trademark of Nintendo, Game Freak and The Pokémon Company. This is an unofficial fan project for personal use, not affiliated with or endorsed by them.
 
-The **Voice** button beneath Pikachu opens setup the first time; after saving a key it starts voice directly. The compact bar shows connection, incoming/outgoing audio packet activity, and mute state. **Mute** toggles the microphone stream; **End** hangs up; **⚙** opens settings. Terminal controls and context sharing are enabled by default for the requested assistant workflow and can be disabled in settings. The Terminal Desk toolbar opens settings. Clear spoken commands execute without repeated confirmation; Gemini asks when the target or destructive action is ambiguous.
+## Contributing
 
-Audio startup uses the output device’s native format and retries without echo cancellation if voice processing fails. Use headphones when the fallback notice appears. If both attempts fail, the voice window shows the native error domain/code; select working input and output devices in macOS Sound settings and retry.
+Changes go through pull requests with code-owner review; see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No open-source license has been chosen, so the code can be read but all rights are reserved.
