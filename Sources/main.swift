@@ -321,20 +321,20 @@ final class BallView: NSView {
     var roll = 0.0 { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
         NSColor.clear.setFill(); bounds.fill()
-        // Poké Ball style: red top, white bottom, black band and button. Spins with `roll` as it travels.
-        let center = NSPoint(x: 21,y: 19), r = 15.0, spin = NSAffineTransform()
+        // Poké Ball style: red top, white bottom, black band and button. Geometry scales with the view (42x38 at pet size 192).
+        let k = bounds.width/42, center = NSPoint(x: bounds.midX,y: bounds.midY), r = 15*k, spin = NSAffineTransform()
         spin.translateX(by: center.x,yBy: center.y); spin.rotate(byRadians: roll); spin.translateX(by: -center.x,yBy: -center.y)
         NSGraphicsContext.saveGraphicsState(); spin.concat()
         let ball = NSBezierPath(ovalIn: NSRect(x: center.x-r,y: center.y-r,width: 2*r,height: 2*r))
         NSColor.white.setFill(); ball.fill()
         NSGraphicsContext.saveGraphicsState(); ball.addClip()
         NSColor(calibratedRed: 0.87,green: 0.16,blue: 0.16,alpha: 1).setFill(); NSRect(x: center.x-r,y: center.y,width: 2*r,height: r).fill()
-        NSColor(calibratedWhite: 0.12,alpha: 1).setFill(); NSRect(x: center.x-r,y: center.y-2,width: 2*r,height: 4).fill()
+        NSColor(calibratedWhite: 0.12,alpha: 1).setFill(); NSRect(x: center.x-r,y: center.y-2*k,width: 2*r,height: 4*k).fill()
         NSGraphicsContext.restoreGraphicsState()
-        NSColor(calibratedWhite: 0.12,alpha: 1).setStroke(); ball.lineWidth = 1.6; ball.stroke()
-        NSColor(calibratedWhite: 0.12,alpha: 1).setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-5.5,y: center.y-5.5,width: 11,height: 11)).fill()
-        NSColor.white.setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-3.3,y: center.y-3.3,width: 6.6,height: 6.6)).fill()
-        NSColor(calibratedWhite: 1,alpha: 0.4).setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-10,y: center.y+5,width: 8,height: 5)).fill()
+        NSColor(calibratedWhite: 0.12,alpha: 1).setStroke(); ball.lineWidth = 1.6*k; ball.stroke()
+        NSColor(calibratedWhite: 0.12,alpha: 1).setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-5.5*k,y: center.y-5.5*k,width: 11*k,height: 11*k)).fill()
+        NSColor.white.setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-3.3*k,y: center.y-3.3*k,width: 6.6*k,height: 6.6*k)).fill()
+        NSColor(calibratedWhite: 1,alpha: 0.4).setFill(); NSBezierPath(ovalIn: NSRect(x: center.x-10*k,y: center.y+5*k,width: 8*k,height: 5*k)).fill()
         NSGraphicsContext.restoreGraphicsState()
     }
 }
@@ -744,7 +744,9 @@ final class Companion: NSObject, NSApplicationDelegate {
                 thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!")
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
                 precondition(panel.frame.width == 384 || panel.frame.width == 192)
-                huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384); large(); precondition(pet.frame.width == 192)
+                huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384)
+                showBall(); moveBall(BallGame(origin: panel.frame.origin,start: 0,runs: 1),at: 0); precondition(ballPanel?.frame.width == 84 && ballPanel?.frame.height == 76); ballPanel?.orderOut(nil)
+                large(); precondition(pet.frame.width == 192)
                 previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] } && pet.typingPhase == nil)
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
@@ -1061,11 +1063,11 @@ final class Companion: NSObject, NSApplicationDelegate {
         }
         ballPanel?.order(.above,relativeTo: panel.windowNumber)
     }
-    // Ball coordinates are cat origins; the ball rests in front of the cat's paws at that origin.
+    // Ball coordinates are pet origins; the ball rests in front of the paws and scales with the pet (42x38 at width 192).
     func moveBall(_ game: BallGame, at now: Double) {
-        let p = game.ballPosition(at: now)
-        ballPanel?.setFrameOrigin(NSPoint(x: p.x+panel.frame.width/2-21,y: p.y+pet.frame.minY-6))
-        (ballPanel?.contentView as? BallView)?.roll = game.ballRoll(at: now)
+        let p = game.ballPosition(at: now), k = panel.frame.width/192
+        ballPanel?.setFrame(NSRect(x: p.x+panel.frame.width/2-21*k,y: p.y+pet.frame.minY-6*k,width: 42*k,height: 38*k),display: true)
+        (ballPanel?.contentView as? BallView)?.roll = game.ballRoll(at: now)/k
     }
     func eatTreat() {
         guard let treat = treatPanel, excursion == nil, ballGame == nil else { return }
