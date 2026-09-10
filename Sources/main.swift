@@ -742,6 +742,7 @@ final class Companion: NSObject, NSApplicationDelegate {
                 thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!")
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
                 huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384); large()
+                previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] } && pet.typingPhase == nil)
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
             }
@@ -864,26 +865,19 @@ final class Companion: NSObject, NSApplicationDelegate {
             if actionRow == 6 { (row, col) = danceFrames[Int((now - actionStart) / 0.14) % danceFrames.count]; dancing = true }
             else { row = actionRow; col = Int((now - actionStart) / 0.14) % counts[row] }
         } else if typing.active(at: now) {
-            row = 10; col = 0
             let cadence = typing.cadence(at: now)
-            pet.typingPhase = Int(now / cadence)
+            row = 9; col = Int(now / cadence) % counts[9]
             if cadence < 0.1 { pet.caption = "Turbo paws" }
         } else if sleeping {
             row = 0; col = 1; pet.snoozing = true
             if let end = life.focusEnd { pet.caption = "Focus · \(max(0,Int(ceil((end-now)/60)))) min" }
-        } else if !paused {
-            // AppKit mouse and window coordinates both use a bottom-left origin,
-            // including negative coordinates on secondary displays.
-            let point = NSEvent.mouseLocation
-            let face = NSPoint(x: panel.frame.midX, y: panel.frame.minY + pet.frame.minY + pet.frame.height * 0.68)
-            if let d = direction(point.x - face.x, point.y - face.y) { row = 9 + d / 8; col = d % 8 }
         }
         if now < terminalUntil { pet.caption = terminalMessage }
         if now < walkUntil { pet.caption = "Stand up & take a short walk" }
         if now < focusUntil { pet.caption = "Hey. Time to focus." }
         pet.dancing = dancing
-        pet.gazeDirection = row >= 9 ? (row-9)*8+col : nil
-        pet.headphonesFitAvailable = row == 0 || row >= 9
+        pet.gazeDirection = nil
+        pet.headphonesFitAvailable = row == 0
         pet.sprite = images["\(row)-\(col)"]
     }
     @objc func toggleTerminal() {
