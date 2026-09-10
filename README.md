@@ -60,7 +60,7 @@ Everything is in the right-click menu, or under the paw in the menu bar.
 - **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
 - **Headphones.** Appear automatically while your Mac is playing audio (it can't tell music from notifications), or manually via music mode. The cups were positioned for the original cat sprites and can sit oddly on Pikachu.
 - **Sounds.** Optional purr and chime, off by default.
-- **Size.** Small, Large, Extra large, Huge. Size lasts for the session. **Reset position** brings Pikachu back on screen.
+- **Size.** Small, Large (the default), Extra large, Huge. A chosen size lasts for the session. **Reset position** brings Pikachu back on screen.
 - **Cursor tracking.** This sprite set has no head-turn frames, so Pikachu idles and blinks instead of following the pointer. **Pause cursor following** therefore has no visible effect.
 
 ## Good to know

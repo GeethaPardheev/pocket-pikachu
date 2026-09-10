@@ -624,6 +624,8 @@ final class Companion: NSObject, NSApplicationDelegate {
             activity?.toolTip = voice?.status.stringValue
         }
         panel.contentView = root
+        // Default to the Large preset; subviews follow through autoresizing.
+        panel.setContentSize(NSSize(width: 192, height: 192 * 208 / 192 + 72))
         if let index = CommandLine.arguments.firstIndex(of: "--render-pet-controls"), CommandLine.arguments.count > index+1 {
             pet.sprite = images["0-0"]
             if let bitmap = root.bitmapImageRepForCachingDisplay(in: root.bounds) {
@@ -741,7 +743,8 @@ final class Companion: NSObject, NSApplicationDelegate {
                 dance(); tick(); precondition(pet.dancing && pet.sprite === images["6-0"])
                 thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!")
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
-                huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384); large()
+                precondition(panel.frame.width == 384 || panel.frame.width == 192)
+                huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384); large(); precondition(pet.frame.width == 192)
                 previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] } && pet.typingPhase == nil)
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
