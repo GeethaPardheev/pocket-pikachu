@@ -143,34 +143,6 @@ final class PetPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-final class PetRootView: NSView {
-    override func resizeSubviews(withOldSize oldSize: NSSize) {
-        super.resizeSubviews(withOldSize: oldSize)
-        for button in subviews where (900...902).contains(button.tag) {
-            button.frame = NSRect(x: Double(button.tag-900)*bounds.width/3, y: 1, width: bounds.width/3, height: 24)
-        }
-    }
-}
-final class PetControlButton: NSButton {
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor(calibratedWhite: isHighlighted ? 0.32 : 0.17, alpha: 0.96).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 1,dy: 1), xRadius: 6,yRadius: 6).fill()
-        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
-        (title as NSString).draw(in: NSRect(x: 0,y: 4,width: bounds.width,height: 16),withAttributes: [.font: NSFont.systemFont(ofSize: 10,weight: .medium),.foregroundColor: NSColor.white,.paragraphStyle: paragraph])
-    }
-}
-final class PetVoiceButton: NSButton {
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor(calibratedRed: 0.12, green: 0.24, blue: 0.26, alpha: isHighlighted ? 1 : 0.94).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12).fill()
-        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
-        (title as NSString).draw(in: NSRect(x: 23, y: 5, width: 53, height: 17), withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: NSColor.white, .paragraphStyle: paragraph])
-        NSColor.white.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 17, y: 11, width: 4, height: 8), xRadius: 2, yRadius: 2).fill()
-        let mic = NSBezierPath(); mic.move(to: NSPoint(x: 14, y: 13)); mic.curve(to: NSPoint(x: 24, y: 13), controlPoint1: NSPoint(x: 14, y: 5), controlPoint2: NSPoint(x: 24, y: 5)); mic.move(to: NSPoint(x: 19, y: 8)); mic.line(to: NSPoint(x: 19, y: 5)); mic.lineWidth = 1.4; NSColor.white.setStroke(); mic.stroke()
-    }
-}
-
 final class PetView: NSView {
     var typingPhase: Int? = nil
     var home: PetHome = .none
@@ -589,43 +561,18 @@ final class Companion: NSObject, NSApplicationDelegate {
                 images[key] = image
             }
         }
-        panel = PetPanel(contentRect: NSRect(x: 0, y: 0, width: 154, height: 239), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = PetPanel(contentRect: NSRect(x: 0, y: 0, width: 154, height: 167), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
         panel.level = .floating; panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
-        let root = PetRootView(frame: NSRect(origin: .zero, size: panel.frame.size))
-        pet.owner = self; pet.frame = NSRect(x: 0, y: 72, width: 154, height: 167)
+        let root = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        pet.owner = self; pet.frame = NSRect(x: 0, y: 0, width: 154, height: 167)
         pet.autoresizingMask = [.width, .height]
         root.addSubview(pet)
-        let voiceButton = PetVoiceButton(title: "Voice", target: self, action: #selector(openPetVoice))
-        voiceButton.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Voice")
-        voiceButton.imagePosition = .imageLeading
-        voiceButton.bezelStyle = .rounded
-        voiceButton.frame = NSRect(x: 33, y: 41, width: 88, height: 26)
-        voiceButton.autoresizingMask = [.minXMargin, .maxXMargin]
-        voiceButton.toolTip = "Open Gemini voice controls"
-        root.addSubview(voiceButton)
-        let activity = NSTextField(labelWithString: "Voice ready")
-        activity.alignment = .center; activity.font = .systemFont(ofSize: 10, weight: .medium)
-        activity.textColor = .white; activity.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.9); activity.drawsBackground = true
-        activity.frame = NSRect(x: 0,y: 27,width: 154,height: 14); activity.autoresizingMask = [.width]; root.addSubview(activity)
-        for (title, selector, x) in [("Mute", #selector(mutePetVoice), 0.0), ("End", #selector(endPetVoice), 49.0), ("⚙", #selector(voiceSettings), 98.0)] {
-            let button = PetControlButton(title: title,target: self,action: selector); button.bezelStyle = .rounded
-            button.tag = 900 + Int(x / 49)
-            button.frame = NSRect(x: x,y: 1,width: 48,height: 24); button.autoresizingMask = [.minXMargin,.maxXMargin]; root.addSubview(button)
-        }
-        Timer.scheduledTimer(withTimeInterval: 0.15,repeats: true) { [weak self, weak activity, weak voiceButton] _ in
-            let voice = self?.terminalDesk?.voice
-            let now = ProcessInfo.processInfo.systemUptime
-            activity?.stringValue = voice?.starting == true ? "Connecting…" : voice?.connected == true ? (voice?.muted == true ? "Muted" : now - (voice?.outputPulse ?? 0) < 0.5 ? "▂▆█▅▂ Speaking" : now - (voice?.inputPulse ?? 0) < 0.5 ? "▂▄▆▄▂ Listening" : "Live") : "Voice ready"
-            voiceButton?.title = voice?.connected == true || voice?.starting == true ? "Stop" : "Voice"
-            voiceButton?.needsDisplay = true
-            activity?.toolTip = voice?.status.stringValue
-        }
         panel.contentView = root
         // Default to the Large preset; subviews follow through autoresizing.
-        panel.setContentSize(NSSize(width: 192, height: 192 * 208 / 192 + 72))
+        panel.setContentSize(NSSize(width: 192, height: 192 * 208 / 192))
         if let index = CommandLine.arguments.firstIndex(of: "--render-pet-controls"), CommandLine.arguments.count > index+1 {
             pet.sprite = images["0-0"]
             if let bitmap = root.bitmapImageRepForCachingDisplay(in: root.bounds) {
@@ -756,7 +703,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         if typingEnabled { requestTypingAccess() }
     }
     func buildMenu() {
-        add("Open terminals", #selector(openTerminals))
+        add("Open terminals", #selector(openTerminals)); add("Voice assistant…", #selector(voiceSettings))
         terminalItem = add("Terminal notifications", #selector(toggleTerminal))
         let history = NSMenuItem(title: "Recent terminal activity",action: nil,keyEquivalent: "")
         history.submenu = terminalHistory; menu.addItem(history)
@@ -916,13 +863,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         }
     }
     var seenTerminalEvents: [String] = []
-    @objc func mutePetVoice() { terminalDesk?.voice?.toggleMic() }
-    @objc func endPetVoice() { terminalDesk?.voice?.stop() }
     @objc func voiceSettings() { if terminalDesk == nil { terminalDesk = TerminalDesk() }; terminalDesk?.openVoice() }
-    @objc func openPetVoice() {
-        if terminalDesk == nil { terminalDesk = TerminalDesk() }
-        if terminalDesk?.voice == nil { terminalDesk?.voice = GeminiVoice(desk: terminalDesk!) }; terminalDesk?.voice?.quickStart()
-    }
     @objc func openTerminals() {
         if terminalDesk == nil { terminalDesk = TerminalDesk() }
         terminalDesk?.show(above: panel.frame)
@@ -1144,7 +1085,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         if !NSScreen.screens.contains(where: { $0.visibleFrame.contains(panel.frame) }) { resetPosition() }
     }
     func resize(_ width: Double) {
-        panel.setContentSize(NSSize(width: width, height: width * 208 / 192 + 72)); screenChanged()
+        panel.setContentSize(NSSize(width: width, height: width * 208 / 192)); screenChanged()
     }
     @objc func small() { resize(115) }
     @objc func large() { resize(192) }

@@ -99,13 +99,13 @@ It works in any interactive zsh, including IDE terminals that load your zshrc. B
 
 ## Voice control of the terminals (Gemini Live, optional)
 
-Click **Voice** under Pikachu or in Terminal Desk. Enter a Gemini API key, which is stored only in macOS Keychain and removable with **Forget saved key**. Keep the suggested Live model (`gemini-3.1-flash-live-preview`), click **Start voice**, and allow the microphone. Google API billing applies; a consumer Gemini subscription is not an API key.
+Choose **Voice assistant…** in the right-click menu, or click **Voice** in Terminal Desk. Enter a Gemini API key, which is stored only in macOS Keychain and removable with **Forget saved key**. Keep the suggested Live model (`gemini-3.1-flash-live-preview`), click **Start voice**, and allow the microphone. Google API billing applies; a consumer Gemini subscription is not an API key.
 
 Say things like “List my terminals”, “Create a new terminal”, “In terminal 2, type claude and press Enter”, “Send Control-C to terminal 2”, or “Press Escape in terminal 2”. Terminal IDs are the numbers on the tab labels.
 
 - It can list and create Pikachu's own terminals, type one line (up to 16 KB, no control characters) with or without Enter, and send Ctrl-C or Escape. Nothing else: no other windows, files or settings.
 - **Allow voice to control this pet's terminals** and **Share recent pet terminal output with Gemini** are on by default and can be turned off in settings (⚙). Sharing sends changed screen snapshots every 4 seconds, up to 8 tabs, the last 60 lines and 4,000 characters each. That can include private text.
-- **Mute** stops sending audio. **End**, **Stop**, saying “hang up”, or quitting the app disconnects. Nothing listens at launch. Audio and transcripts are not saved and there is no chat window. While connected, your audio, transcripts, tool calls and terminal snapshots go to Google under Google's data policies.
+- **Mute** in the voice window stops sending audio. **Stop**, saying “hang up”, or quitting the app disconnects. Nothing listens at launch. Audio and transcripts are not saved and there is no chat window. While connected, your audio, transcripts, tool calls and terminal snapshots go to Google under Google's data policies.
 - Spoken commands run with your normal permissions, so watch the terminal. Gemini asks when a target or a destructive command is unclear. Duplicate or cancelled tool calls are ignored.
 - Under the hood: AVAudioEngine and a WebSocket to Google's Live API, 16-bit PCM in and 24 kHz out. If audio fails to start it retries without echo cancellation; use headphones then. Reconnect by hand after a dropped session.
 
