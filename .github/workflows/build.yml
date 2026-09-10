@@ -1,0 +1,17 @@
+name: macOS build
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    name: Build and self-test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test native companion
+        run: ./scripts/test.sh
+      - name: Verify signature
+        run: codesign --verify --deep --strict 'build/Pocket Pikachu.app'
