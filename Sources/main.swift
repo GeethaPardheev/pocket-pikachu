@@ -268,19 +268,30 @@ func tailIcon() -> NSImage {
 }
 
 final class ThunderView: NSView {
-    struct Strike { var at: Double; var bolt: NSImage }
+    struct Variant { var glow: NSImage; var core: NSImage }
+    struct Spark { var birth: Double; var angle: Double; var speed: Double; var length: Double }
     var phase = 0.0 { didSet { needsDisplay = true } }
-    var target = NSPoint.zero
-    var strikes: [Strike] = []
-    var sparks: [(angle: Double, speed: Double, length: Double)] = []
-    var chargeSeed = 0
-    // Fractions of the animation, matched to the voice clip: build-up, shout, second burst, tail.
-    static let strikeTimes = [0.21, 0.354, 0.54], hold = 0.19
-    func prepare(target point: NSPoint) {
-        target = point
-        strikes = Self.strikeTimes.enumerated().map { Strike(at: $1, bolt: renderBolt(strength: $0 == 2 ? 1.35 : $0 == 0 ? 1.1 : 0.85)) }
-        sparks = (0..<28).map { _ in (Double.random(in: 0..<2 * .pi), Double.random(in: 140...520), Double.random(in: 8...30)) }
+    var duration = 2.4
+    var origin = NSPoint.zero            // Pikachu's head: the discharge starts here
+    var variants: [Variant] = []         // bolt geometry re-rolls every few frames while discharging
+    var sparks: [Spark] = []
+    // Timeline as fractions of the clip: charge, discharge on the shout, a surge, a last crackle, afterglow.
+    static let dischargeStart = 0.21, dischargeEnd = 0.45, surge = 0.335...0.44, crackle = 0.54...0.61
+    static func discharge(_ p: Double) -> Double {
+        if p >= dischargeStart && p < dischargeEnd {
+            let attack = min(1, (p-dischargeStart)/0.012), release = p > 0.40 ? max(0, (dischargeEnd-p)/0.05) : 1
+            let flicker = 0.72 + 0.28*abs(sin(p*310)*cos(p*173)) + (surge.contains(p) ? 0.2 : 0)
+            return min(1, attack*release*flicker)
+        }
+        if crackle.contains(p) { return 0.55*(1-(p-crackle.lowerBound)/0.07)*(0.6+0.4*abs(sin(p*400))) }
+        return 0
     }
+    func prepare(target point: NSPoint) {
+        origin = point; variants = []; warm()
+        sparks = (0..<90).map { _ in Spark(birth: Self.dischargeStart + Double.random(in: 0...0.22), angle: Double.random(in: 0.15...(Double.pi-0.15)) * (Bool.random() ? 1 : -1) + (Bool.random() ? 0 : .pi/2), speed: Double.random(in: 300...1100), length: Double.random(in: 10...40)) }
+    }
+    // One geometry roll per call, so the work spreads over the charge frames.
+    func warm() { if variants.count < 6 { variants.append(renderVariant(strength: variants.count % 3 == 0 ? 1.4 : 1.0)) } }
     // Midpoint displacement gives the tortuous channel real lightning has.
     func channel(from a: NSPoint, to b: NSPoint, depth: Int, jag: Double) -> [NSPoint] {
         if depth == 0 { return [a, b] }
@@ -288,77 +299,101 @@ final class ThunderView: NSView {
         let m = NSPoint(x: (a.x+b.x)/2 - dy/len*off, y: (a.y+b.y)/2 + dx/len*off)
         return channel(from: a, to: m, depth: depth-1, jag: jag) + channel(from: m, to: b, depth: depth-1, jag: jag).dropFirst()
     }
-    func polyline(_ pts: [NSPoint]) -> NSBezierPath { let p = NSBezierPath(); p.move(to: pts[0]); for q in pts.dropFirst() { p.line(to: q) }; p.lineJoinStyle = .round; p.lineCapStyle = .round; return p }
-    // One strike rendered once: main channel plus branches and twigs, white-hot core inside layered golden glow.
-    func renderBolt(strength: Double) -> NSImage {
-        let image = NSImage(size: bounds.size); image.lockFocus()
-        var paths: [(NSBezierPath, Double)] = []
-        let start = NSPoint(x: target.x + Double.random(in: -bounds.width*0.28...bounds.width*0.28), y: bounds.height + 20)
-        let main = channel(from: start, to: target, depth: 7, jag: 0.17)
-        paths.append((polyline(main), 1))
-        for _ in 0..<Int(6*strength) {
-            let i = Int.random(in: 4..<max(5, main.count-10)), p = main[i]
-            let dir = atan2(target.y-p.y, target.x-p.x) + Double.random(in: -1.0...1.0)
-            let len = hypot(target.x-p.x, target.y-p.y)*Double.random(in: 0.15...0.4)
-            let branch = channel(from: p, to: NSPoint(x: p.x+cos(dir)*len, y: p.y+sin(dir)*len), depth: 5, jag: 0.22)
-            paths.append((polyline(branch), 0.45))
-            if Bool.random() {
-                let q = branch[Int.random(in: 2..<max(3, branch.count-2))], d2 = dir + Double.random(in: -0.9...0.9), l2 = len*Double.random(in: 0.25...0.5)
-                paths.append((polyline(channel(from: q, to: NSPoint(x: q.x+cos(d2)*l2, y: q.y+sin(d2)*l2), depth: 4, jag: 0.25)), 0.22))
+    func polyline(_ pts: [NSPoint], scale: Double = 1) -> NSBezierPath { let p = NSBezierPath(); p.move(to: NSPoint(x: pts[0].x*scale, y: pts[0].y*scale)); for q in pts.dropFirst() { p.line(to: NSPoint(x: q.x*scale, y: q.y*scale)) }; p.lineJoinStyle = .round; p.lineCapStyle = .round; return p }
+    // One geometry roll: a thick column straight up from Pikachu plus channels fanning to the top and side edges,
+    // all branching. Glow is rendered at quarter size (it is blurry anyway); cores at full size.
+    func renderVariant(strength: Double) -> Variant {
+        var paths: [([NSPoint], Double)] = []
+        let w = bounds.width, h = bounds.height
+        var ends = [NSPoint(x: origin.x + Double.random(in: -w*0.08...w*0.08), y: h+30)]
+        for f in [0.06, 0.28, 0.5, 0.72, 0.94] { ends.append(NSPoint(x: w*f + Double.random(in: -w*0.05...w*0.05), y: h+30)) }
+        ends.append(NSPoint(x: -30, y: h*Double.random(in: 0.45...0.9))); ends.append(NSPoint(x: w+30, y: h*Double.random(in: 0.45...0.9)))
+        for (n, end) in ends.enumerated() {
+            let main = channel(from: origin, to: end, depth: 7, jag: n == 0 ? 0.12 : 0.18), weight = n == 0 ? 1.0 : Double.random(in: 0.35...0.6)
+            paths.append((main, weight))
+            for _ in 0..<Int((n == 0 ? 9 : 4)*strength) {
+                let i = Int.random(in: 6..<max(7, main.count-6)), p = main[i]
+                let dir = atan2(end.y-p.y, end.x-p.x) + Double.random(in: -1.2...1.2)
+                let len = hypot(end.x-p.x, end.y-p.y)*Double.random(in: 0.12...0.4)
+                let branch = channel(from: p, to: NSPoint(x: p.x+cos(dir)*len, y: p.y+sin(dir)*len), depth: 5, jag: 0.22)
+                paths.append((branch, 0.4*weight))
+                if Bool.random() {
+                    let q = branch[Int.random(in: 2..<max(3, branch.count-2))], d2 = dir + Double.random(in: -1.0...1.0), l2 = len*Double.random(in: 0.25...0.5)
+                    paths.append((channel(from: q, to: NSPoint(x: q.x+cos(d2)*l2, y: q.y+sin(d2)*l2), depth: 4, jag: 0.25), 0.2*weight))
+                }
             }
         }
-        for (path, w) in paths {
+        // Electric web: arcs bridging between channels at a few heights.
+        if strength > 1.2 { for _ in 0..<3 { let y = h*Double.random(in: 0.5...0.95); paths.append((channel(from: NSPoint(x: -20, y: y), to: NSPoint(x: w+20, y: y+Double.random(in: -60...60)), depth: 7, jag: 0.1), 0.3)) } }
+        let glow = NSImage(size: NSSize(width: w/4, height: h/4)); glow.lockFocus()
+        for (pts, weight) in paths {
+            let path = polyline(pts, scale: 0.25)
             NSGraphicsContext.saveGraphicsState()
-            let outer = NSShadow(); outer.shadowBlurRadius = 38*strength; outer.shadowColor = NSColor(calibratedRed: 1, green: 0.72, blue: 0.15, alpha: 0.95*w); outer.set()
-            NSColor(calibratedRed: 1, green: 0.82, blue: 0.3, alpha: 0.6*w).setStroke(); path.lineWidth = 10*w*strength; path.stroke()
+            let outer = NSShadow(); outer.shadowBlurRadius = 11*strength; outer.shadowColor = NSColor(calibratedRed: 1, green: 0.66, blue: 0.1, alpha: min(1, weight*1.2)); outer.set()
+            NSColor(calibratedRed: 1, green: 0.78, blue: 0.2, alpha: 0.75*weight).setStroke(); path.lineWidth = 3.5*weight*strength; path.stroke()
             NSGraphicsContext.restoreGraphicsState()
-            NSGraphicsContext.saveGraphicsState()
-            let inner = NSShadow(); inner.shadowBlurRadius = 9; inner.shadowColor = NSColor(calibratedRed: 1, green: 0.95, blue: 0.7, alpha: 0.9*w); inner.set()
-            NSColor(calibratedRed: 1, green: 0.96, blue: 0.8, alpha: 0.9*w).setStroke(); path.lineWidth = 3.6*w*strength; path.stroke()
-            NSGraphicsContext.restoreGraphicsState()
-            NSColor(calibratedWhite: 1, alpha: min(1, w+0.25)).setStroke(); path.lineWidth = max(1, 1.7*w*strength); path.stroke()
         }
-        image.unlockFocus(); return image
-    }
-    // Return-stroke flicker: full brightness, several rapid re-strikes, then decay.
-    static func intensity(_ since: Double) -> Double {
-        guard since >= 0, since < hold else { return 0 }
-        let u = since/hold
-        if u < 0.06 { return 1 }
-        return exp(-u*4.2)*(0.5+0.5*abs(sin(u*46)*cos(u*19+1))) + (u < 0.4 ? 0.12 : 0)
+        glow.unlockFocus()
+        let core = NSImage(size: bounds.size); core.lockFocus()
+        for (pts, weight) in paths {
+            let path = polyline(pts)
+            NSColor(calibratedRed: 1, green: 0.95, blue: 0.75, alpha: 0.75*weight).setStroke(); path.lineWidth = 7*weight*strength; path.stroke()
+            NSColor(calibratedWhite: 1, alpha: min(1, weight+0.35)).setStroke(); path.lineWidth = max(1.2, 2.6*weight*strength); path.stroke()
+        }
+        core.unlockFocus()
+        return Variant(glow: glow, core: core)
     }
     override func draw(_ dirtyRect: NSRect) {
         NSColor.clear.setFill(); bounds.fill()
-        // Storm dimming ramps in before the first strike and lifts at the end.
-        let dim = phase < 0.18 ? phase/0.18*0.26 : phase > 0.82 ? max(0, (1-phase)/0.18)*0.26 : 0.26
-        NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.09, alpha: dim).setFill(); bounds.fill()
-        // Charging: small crackles around the target before the strike.
-        if phase > 0.05 && phase < Self.strikeTimes[0] {
-            srand48(Int(phase*60))
-            for _ in 0..<5 where drand48() < 0.7 {
-                let a = drand48()*2 * .pi, r = 30+drand48()*70, b = a + (drand48()-0.5)*1.4
-                let from = NSPoint(x: target.x+cos(a)*r*0.5, y: target.y+sin(a)*r*0.5), to = NSPoint(x: target.x+cos(b)*r, y: target.y+sin(b)*r)
-                let path = polyline(channel(from: from, to: to, depth: 3, jag: 0.3))
-                NSColor(calibratedRed: 1, green: 0.9, blue: 0.4, alpha: 0.5).setStroke(); path.lineWidth = 3; path.stroke()
-                NSColor(calibratedWhite: 1, alpha: 0.9).setStroke(); path.lineWidth = 1.2; path.stroke()
+        let p = phase, k = Self.discharge(p)
+        // Storm dimming and an edge vignette so the bolts have contrast; both lift at the end.
+        let dim = p < 0.18 ? p/0.18*0.45 : p > 0.7 ? max(0, (1-p)/0.3)*0.45 : 0.45
+        NSColor(calibratedRed: 0.01, green: 0.02, blue: 0.08, alpha: dim).setFill(); bounds.fill()
+        if k > 0 { NSGradient(colorsAndLocations: (.clear, 0.45), (NSColor(calibratedRed: 0.05, green: 0.02, blue: 0.0, alpha: 0.5*k), 1))?.draw(in: NSBezierPath(rect: bounds), relativeCenterPosition: .zero) }
+        // Charge: a pulsing aura, energy streaks spiralling in, cheek crackles getting frantic.
+        if p > 0.03 && p < Self.dischargeStart {
+            let grow = (p-0.03)/(Self.dischargeStart-0.03), pulse = 0.7+0.3*sin(p*90)
+            let r = (40+150*grow)*pulse
+            NSGradient(colorsAndLocations: (NSColor(calibratedRed: 1, green: 0.92, blue: 0.5, alpha: 0.5*grow), 0), (NSColor(calibratedRed: 1, green: 0.8, blue: 0.2, alpha: 0.18*grow), 0.5), (.clear, 1))?.draw(in: NSBezierPath(ovalIn: NSRect(x: origin.x-r, y: origin.y-r, width: 2*r, height: 2*r)), relativeCenterPosition: .zero)
+            srand48(Int(p*70))
+            for i in 0..<18 {
+                let a0 = Double(i)/18*2 * .pi + p*9, dist = (420 - 380*((p*3 + Double(i)*0.11).truncatingRemainder(dividingBy: 1)))*(0.4+0.6*grow)
+                let head = NSPoint(x: origin.x+cos(a0)*dist, y: origin.y+sin(a0)*dist), tail = NSPoint(x: origin.x+cos(a0+0.08)*(dist+26), y: origin.y+sin(a0+0.08)*(dist+26))
+                let streak = NSBezierPath(); streak.move(to: tail); streak.line(to: head); streak.lineCapStyle = .round
+                NSColor(calibratedRed: 1, green: 0.9, blue: 0.45, alpha: 0.7*grow*(1-dist/420)).setStroke(); streak.lineWidth = 2.5; streak.stroke()
+            }
+            for _ in 0..<Int(3+10*grow) where drand48() < 0.75 {
+                let a = drand48()*2 * .pi, rr = 25+drand48()*(70+140*grow), b = a + (drand48()-0.5)*1.5
+                let path = polyline(channel(from: NSPoint(x: origin.x+cos(a)*rr*0.35, y: origin.y+sin(a)*rr*0.35), to: NSPoint(x: origin.x+cos(b)*rr, y: origin.y+sin(b)*rr), depth: 3, jag: 0.3))
+                NSColor(calibratedRed: 1, green: 0.85, blue: 0.3, alpha: 0.6).setStroke(); path.lineWidth = 4; path.stroke()
+                NSColor(calibratedWhite: 1, alpha: 0.95).setStroke(); path.lineWidth = 1.5; path.stroke()
             }
         }
-        for strike in strikes {
-            let k = Self.intensity(phase-strike.at)
-            guard k > 0 else { continue }
-            let u = (phase-strike.at)/Self.hold
-            // Sky flash, brighter close to the bolt.
-            NSColor(calibratedRed: 1, green: 0.97, blue: 0.85, alpha: 0.42*k*k).setFill(); bounds.fill()
-            strike.bolt.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: min(1, k*1.15))
-            // Impact glow and flying sparks at Pikachu.
-            let r = 50 + 110*k
-            NSGradient(colorsAndLocations: (NSColor(calibratedWhite: 1, alpha: 0.85*k), 0), (NSColor(calibratedRed: 1, green: 0.88, blue: 0.4, alpha: 0.4*k), 0.3), (NSColor(calibratedRed: 1, green: 0.8, blue: 0.25, alpha: 0.12*k), 0.65), (.clear, 1))?.draw(in: NSBezierPath(ovalIn: NSRect(x: target.x-r, y: target.y-r, width: 2*r, height: 2*r)), relativeCenterPosition: .zero)
-            for spark in sparks where u < 0.8 {
-                let d = spark.speed*u*0.45, head = NSPoint(x: target.x+cos(spark.angle)*d, y: target.y+sin(spark.angle)*d - 300*u*u*0.45)
-                let tail = NSPoint(x: head.x-cos(spark.angle)*spark.length, y: head.y-sin(spark.angle)*spark.length + 40*u)
-                let path = NSBezierPath(); path.move(to: tail); path.line(to: head); path.lineCapStyle = .round
-                NSColor(calibratedRed: 1, green: 0.9, blue: 0.45, alpha: (1-u)*k).setStroke(); path.lineWidth = 2.2; path.stroke()
+        // Discharge: wash of light, the bolts (geometry re-rolled every 70 ms), shockwave rings, impact bloom.
+        if k > 0, !variants.isEmpty {
+            NSColor(calibratedRed: 1, green: 0.97, blue: 0.88, alpha: 0.38*k).setFill(); bounds.fill()
+            let v = variants[Int((p*duration)/0.07) % variants.count]
+            v.glow.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: min(1, k*1.1))
+            v.core.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: min(1, k*1.15))
+            for (start, width) in [(Self.dischargeStart, 16.0), (Self.surge.lowerBound, 10.0), (Self.crackle.lowerBound, 6.0)] where p >= start && p < start+0.16 {
+                let u = (p-start)/0.16, ring = 80 + 1900*u*u
+                let ringPath = NSBezierPath(ovalIn: NSRect(x: origin.x-ring, y: origin.y-ring, width: 2*ring, height: 2*ring))
+                NSColor(calibratedRed: 1, green: 0.9, blue: 0.5, alpha: 0.55*(1-u)).setStroke(); ringPath.lineWidth = width*(1-u)+2; ringPath.stroke()
+                NSColor(calibratedWhite: 1, alpha: 0.9*(1-u)).setStroke(); ringPath.lineWidth = 2.5; ringPath.stroke()
             }
+            let r = 80 + 200*k
+            NSGradient(colorsAndLocations: (NSColor(calibratedWhite: 1, alpha: 0.95*k), 0), (NSColor(calibratedRed: 1, green: 0.88, blue: 0.4, alpha: 0.55*k), 0.3), (NSColor(calibratedRed: 1, green: 0.8, blue: 0.25, alpha: 0.15*k), 0.65), (.clear, 1))?.draw(in: NSBezierPath(ovalIn: NSRect(x: origin.x-r, y: origin.y-r, width: 2*r, height: 2*r)), relativeCenterPosition: .zero)
+        }
+        // Sparks thrown out during the discharge, arcing under gravity and fading through the afterglow.
+        for spark in sparks where p >= spark.birth {
+            let t = (p-spark.birth)*duration
+            guard t < 1.1 else { continue }
+            let head = NSPoint(x: origin.x+cos(spark.angle)*spark.speed*t, y: origin.y+sin(spark.angle)*spark.speed*t - 900*t*t)
+            let tail = NSPoint(x: head.x-cos(spark.angle)*spark.length, y: head.y-sin(spark.angle)*spark.length + 1800*t*spark.length/spark.speed)
+            let path = NSBezierPath(); path.move(to: tail); path.line(to: head); path.lineCapStyle = .round
+            let a = max(0, 1-t/1.1)
+            NSColor(calibratedRed: 1, green: 0.85, blue: 0.35, alpha: 0.9*a).setStroke(); path.lineWidth = 3.2; path.stroke()
+            NSColor(calibratedWhite: 1, alpha: a).setStroke(); path.lineWidth = 1.3; path.stroke()
         }
     }
 }
@@ -366,40 +401,78 @@ final class ThunderView: NSView {
 final class SpeechBubbleView: NSView {
     var text = ""
     var k = 1.0            // pet scale: 1 at width 192
-    var pop = 1.0          // 0 -> 1 with overshoot while appearing
+    var age = 0.0          // seconds since this text appeared
     var fade = 1.0         // 1 -> 0 while disappearing
-    var bob = 0.0          // vertical wobble in points
     var tailX = 0.5        // where the tail points, as a fraction of the width
+    var shout: Bool { text.contains("!") }
+    static let pad = 15.0, tailH = 20.0, line = 3.4, shadow = 3.0, spike = 9.0
     static func font(_ k: Double) -> NSFont {
-        let size = 13*k, base = NSFont.systemFont(ofSize: size, weight: .heavy)
+        let size = 16*k, base = NSFont.systemFont(ofSize: size, weight: .heavy)
         return NSFont(descriptor: base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor, size: size) ?? base
     }
+    static func attributes(_ k: Double, alpha: Double = 1) -> [NSAttributedString.Key: Any] {
+        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping
+        return [.font: font(k), .foregroundColor: NSColor(calibratedRed: 0.29, green: 0.16, blue: 0.04, alpha: alpha), .paragraphStyle: paragraph,
+                .strokeColor: NSColor(calibratedRed: 1, green: 0.97, blue: 0.75, alpha: alpha), .strokeWidth: -2.2]
+    }
     static func textSize(_ text: String, k: Double, maxWidth: Double) -> NSSize {
-        let rect = (text as NSString).boundingRect(with: NSSize(width: maxWidth, height: 400), options: [.usesLineFragmentOrigin], attributes: [.font: font(k)])
-        return NSSize(width: ceil(rect.width)+2, height: ceil(rect.height))
+        let rect = (text as NSString).boundingRect(with: NSSize(width: maxWidth, height: 600), options: [.usesLineFragmentOrigin], attributes: attributes(k))
+        return NSSize(width: ceil(rect.width)+4, height: ceil(rect.height)+2)
+    }
+    static func size(for text: String, k: Double, maxWidth: Double) -> NSSize {
+        let t = textSize(text, k: k, maxWidth: maxWidth), extra = text.contains("!") ? spike*k : 0
+        return NSSize(width: t.width + 2*(pad+line+shadow+extra)*k + 6*k, height: t.height + 2*(pad*0.7+line+extra)*k + (tailH+shadow)*k + 8*k)
+    }
+    // Rounded comic bubble for talk, a spiky electric burst for shouts.
+    func shape(_ box: NSRect, tip: NSPoint) -> NSBezierPath {
+        let path: NSBezierPath
+        if shout {
+            path = NSBezierPath(); let n = 22, cx = box.midX, cy = box.midY, rx = box.width/2, ry = box.height/2
+            for i in 0..<n {
+                let a = Double(i)/Double(n)*2 * .pi, r = i % 2 == 0 ? 1.0 : 0.88
+                let px = cx + cos(a)*rx*r, py = cy + sin(a)*ry*r
+                i == 0 ? path.move(to: NSPoint(x: px, y: py)) : path.line(to: NSPoint(x: px, y: py))
+            }
+            path.close()
+        } else { path = NSBezierPath(roundedRect: box, xRadius: 16*k, yRadius: 16*k) }
+        // Curved tail towards the mouth.
+        let tail = NSBezierPath(); let baseL = NSPoint(x: tip.x-13*k, y: box.minY+3*k), baseR = NSPoint(x: tip.x+13*k, y: box.minY+3*k)
+        tail.move(to: baseL); tail.curve(to: tip, controlPoint1: NSPoint(x: tip.x-9*k, y: box.minY-8*k), controlPoint2: NSPoint(x: tip.x-2*k, y: tip.y+6*k))
+        tail.curve(to: baseR, controlPoint1: NSPoint(x: tip.x+3*k, y: tip.y+6*k), controlPoint2: NSPoint(x: tip.x+10*k, y: box.minY-8*k)); tail.close()
+        path.append(tail); path.windingRule = .nonZero; path.lineJoinStyle = .round
+        return path
     }
     override func draw(_ dirtyRect: NSRect) {
         NSColor.clear.setFill(); bounds.fill()
-        let pad = 11*k, tail = 15*k, line = 2.6*k, shadow = 2.5*k
+        let line = Self.line*k, shadow = Self.shadow*k, tailH = Self.tailH*k, extra = shout ? Self.spike*k : 0
         let tip = NSPoint(x: bounds.minX + bounds.width*tailX, y: 0)
+        // Pop with squash and stretch, wobble, then a gentle bob; exit shrinks toward the tail.
+        let pop = age < 0.6 ? 1 - exp(-age*11)*cos(age*20) : 1
+        let squashX = age < 0.6 ? 1 + 0.12*exp(-age*9)*sin(age*28) : 1, squashY = age < 0.6 ? 1 - 0.10*exp(-age*9)*sin(age*28) : 1
+        let wobble = age < 1.2 ? 3.5*exp(-age*3)*sin(age*14) : 0.6*sin(age*3)
+        let scale = pop*(0.6+0.4*fade)
         NSGraphicsContext.saveGraphicsState()
-        // Pop from the tail tip, then bob a little while talking.
-        let t = NSAffineTransform(); t.translateX(by: tip.x, yBy: tip.y + bob); t.scale(by: max(0.01, pop)); t.translateX(by: -tip.x, yBy: -tip.y); t.concat()
-        let box = NSRect(x: line+shadow, y: tail+line, width: bounds.width-2*line-2*shadow, height: bounds.height-tail-2*line-shadow)
-        let radius = 12*k
-        let shape = NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius)
-        let tailPath = NSBezierPath(); tailPath.move(to: NSPoint(x: tip.x-9*k, y: box.minY+2*k)); tailPath.line(to: tip); tailPath.line(to: NSPoint(x: tip.x+9*k, y: box.minY+2*k)); tailPath.close()
-        shape.append(tailPath); shape.windingRule = .nonZero
-        // Soft shadow, Pikachu-yellow body, brown outline, glossy highlight.
-        NSColor(calibratedWhite: 0, alpha: 0.28*fade).setFill(); let sh = NSAffineTransform(); sh.translateX(by: shadow, yBy: -shadow); sh.transform(shape).fill()
-        NSColor(calibratedRed: 0.99, green: 0.85, blue: 0.20, alpha: fade).setFill(); shape.fill()
-        NSColor(calibratedRed: 0.36, green: 0.22, blue: 0.08, alpha: fade).setStroke(); shape.lineWidth = line; shape.lineJoinStyle = .round; shape.stroke()
-        NSColor(calibratedWhite: 1, alpha: 0.45*fade).setFill()
-        NSBezierPath(roundedRect: NSRect(x: box.minX+8*k, y: box.maxY-9*k, width: box.width-16*k, height: 4.5*k), xRadius: 2.2*k, yRadius: 2.2*k).fill()
-        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping
-        let textRect = box.insetBy(dx: pad, dy: 0)
+        let t = NSAffineTransform(); t.translateX(by: tip.x, yBy: tip.y + (age < 0.6 ? 0 : sin(age*4)*1.5*k)); t.rotate(byDegrees: wobble); t.scaleX(by: max(0.01, scale*squashX), yBy: max(0.01, scale*squashY)); t.translateX(by: -tip.x, yBy: -tip.y); t.concat()
+        let box = NSRect(x: line+shadow+extra, y: tailH+line+extra, width: bounds.width-2*(line+shadow+extra), height: bounds.height-tailH-2*(line+extra)-shadow)
+        let body = shape(box, tip: tip)
+        NSColor(calibratedWhite: 0, alpha: 0.32*fade).setFill(); let sh = NSAffineTransform(); sh.translateX(by: shadow, yBy: -shadow); sh.transform(body).fill()
+        NSGraphicsContext.saveGraphicsState(); body.addClip()
+        NSGradient(starting: NSColor(calibratedRed: 1, green: 0.90, blue: 0.32, alpha: fade), ending: NSColor(calibratedRed: 0.98, green: 0.78, blue: 0.10, alpha: fade))?.draw(in: bounds, angle: -90)
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor(calibratedRed: 0.33, green: 0.19, blue: 0.06, alpha: fade).setStroke(); body.lineWidth = line; body.stroke()
+        NSColor(calibratedWhite: 1, alpha: 0.5*fade).setFill()
+        NSBezierPath(roundedRect: NSRect(x: box.minX+14*k, y: box.maxY-10*k-extra*0.6, width: box.width-28*k, height: 4.5*k), xRadius: 2.2*k, yRadius: 2.2*k).fill()
+        if shout {   // little bolts in two corners
+            for (cx, cy, flip) in [(box.minX+9*k, box.maxY-10*k, 1.0), (box.maxX-9*k, box.minY+12*k, -1.0)] {
+                let bolt = NSBezierPath(); bolt.move(to: NSPoint(x: cx-3*k*flip, y: cy+7*k)); bolt.line(to: NSPoint(x: cx+2*k*flip, y: cy+1*k)); bolt.line(to: NSPoint(x: cx-1*k*flip, y: cy+1*k)); bolt.line(to: NSPoint(x: cx+3*k*flip, y: cy-7*k)); bolt.line(to: NSPoint(x: cx-2*k*flip, y: cy-1*k)); bolt.line(to: NSPoint(x: cx+1*k*flip, y: cy-1*k)); bolt.close()
+                NSColor(calibratedRed: 0.33, green: 0.19, blue: 0.06, alpha: 0.85*fade).setFill(); bolt.fill()
+            }
+        }
+        // Typewriter reveal, about 30 characters a second.
+        let shown = String(text.prefix(max(1, Int(age*30)+1)))
+        let textRect = box.insetBy(dx: Self.pad*k+extra*0.5, dy: 0)
         let textHeight = Self.textSize(text, k: k, maxWidth: textRect.width).height
-        (text as NSString).draw(in: NSRect(x: textRect.minX, y: box.midY - textHeight/2 - 1*k, width: textRect.width, height: textHeight), withAttributes: [.font: Self.font(k), .foregroundColor: NSColor(calibratedRed: 0.30, green: 0.17, blue: 0.05, alpha: fade), .paragraphStyle: paragraph])
+        (shown as NSString).draw(in: NSRect(x: textRect.minX, y: box.midY-textHeight/2-1*k, width: textRect.width, height: textHeight+4*k), withAttributes: Self.attributes(k, alpha: fade))
         NSGraphicsContext.restoreGraphicsState()
     }
 }
@@ -831,7 +904,9 @@ final class Companion: NSObject, NSApplicationDelegate {
                 panel.setFrameOrigin(home)
                 dance(); tick(); precondition(pet.dancing && pet.sprite === images["6-0"])
                 precondition(voiceClips.count == 8); say("pika"); precondition(voiceSound?.isPlaying == true); voiceSound?.stop()
-                thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!" && thunderPanel?.isVisible == true && (thunderPanel?.contentView as? ThunderView)?.strikes.count == 3)
+                let t0 = ProcessInfo.processInfo.systemUptime
+                thunderbolt(); print("thunderbolt prepared in \(Int((ProcessInfo.processInfo.systemUptime-t0)*1000)) ms"); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!" && thunderPanel?.isVisible == true && ((thunderPanel?.contentView as? ThunderView)?.variants.count ?? 0) >= 1)
+                for _ in 0..<6 { (thunderPanel?.contentView as? ThunderView)?.warm() }; precondition((thunderPanel?.contentView as? ThunderView)?.variants.count == 6)
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
                 precondition(bubblePanel?.isVisible == true && (bubblePanel?.contentView as? SpeechBubbleView)?.text == "Hey. Time to focus." && (bubblePanel?.frame.width ?? 0) > panel.frame.width*0.6)
                 precondition(panel.frame.width == 384 || panel.frame.width == 192)
@@ -935,10 +1010,10 @@ final class Companion: NSObject, NSApplicationDelegate {
             let phase = (now-thunderStart)/thunderDuration
             if phase >= 1 { sky.orderOut(nil); if ballGame == nil && excursion == nil { panel.setFrameOrigin(thunderBase) } }
             else {
-                (sky.contentView as? ThunderView)?.phase = phase
-                let shake = ThunderView.strikeTimes.map { ThunderView.intensity(phase-$0) }.max() ?? 0
-                if !thunderRumbled && phase >= ThunderView.strikeTimes[0] { thunderRumbled = true; rumble() }
-                if ballGame == nil && excursion == nil && NSEvent.pressedMouseButtons == 0 { panel.setFrameOrigin(NSPoint(x: thunderBase.x+Double.random(in: -4...4)*shake, y: thunderBase.y+Double.random(in: -3...3)*shake)) }
+                (sky.contentView as? ThunderView)?.warm(); (sky.contentView as? ThunderView)?.phase = phase
+                let shake = ThunderView.discharge(phase)
+                if !thunderRumbled && phase >= ThunderView.dischargeStart { thunderRumbled = true; rumble() }
+                if ballGame == nil && excursion == nil && NSEvent.pressedMouseButtons == 0 { panel.setFrameOrigin(NSPoint(x: thunderBase.x+Double.random(in: -9...9)*shake, y: thunderBase.y+Double.random(in: -6...6)*shake)) }
             }
         }
         if var game = ballGame {
@@ -972,8 +1047,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         } else if now < actionUntil {
             if actionRow == 6 { (row, col) = danceFrames[Int((now - actionStart) / 0.14) % danceFrames.count]; dancing = true }
             else if actionRow == 8, thunderPanel?.isVisible == true {
-                let phase = (now-thunderStart)/thunderDuration, flash = ThunderView.strikeTimes.map { ThunderView.intensity(phase-$0) }.max() ?? 0
-                row = 8; col = phase < 0.1 ? 0 : phase < 0.21 ? 1 : phase < 0.76 ? (flash > 0.5 ? 3 : 2) : phase < 0.88 ? 4 : 5
+                let phase = (now-thunderStart)/thunderDuration, power = ThunderView.discharge(phase)
+                row = 8; col = phase < 0.11 ? 0 : phase < ThunderView.dischargeStart ? 1 : phase < ThunderView.dischargeEnd ? (power > 0.85 ? 3 : 2) : phase < 0.62 ? (power > 0.3 ? 3 : 4) : phase < 0.8 ? 4 : 5
             }
             else { row = actionRow; col = Int((now - actionStart) / 0.14) % counts[row] }
         } else if typing.active(at: now) {
@@ -1159,16 +1234,13 @@ final class Companion: NSObject, NSApplicationDelegate {
         }
         guard let window = bubblePanel, let view = window.contentView as? SpeechBubbleView else { return }
         let k = panel.frame.width/192, age = now-bubbleSince
-        let textSize = SpeechBubbleView.textSize(shown, k: k, maxWidth: panel.frame.width*1.5)
-        let size = NSSize(width: textSize.width+2*11*k+2*2.6*k+2*2.5*k+2, height: textSize.height+2*8*k+15*k+2*2.6*k+2.5*k+8*k)
+        let size = SpeechBubbleView.size(for: shown, k: k, maxWidth: panel.frame.width*1.6)
         // Tail tip sits just above the head, toward the side the face is on.
         let tipX = panel.frame.midX + (pet.mirrored ? 0.08 : -0.08)*panel.frame.width, tipY = panel.frame.maxY - 0.10*panel.frame.height
         let screen = (NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main)?.visibleFrame ?? panel.frame
         var x = tipX - size.width/2; x = min(max(screen.minX, x), screen.maxX-size.width)
         let y = min(tipY, screen.maxY-size.height)
-        view.text = shown; view.k = k; view.fade = fade; view.tailX = (tipX-x)/size.width
-        view.pop = age < 0.5 ? 1 - exp(-age*14)*cos(age*22) : 1
-        view.bob = age < 0.5 ? 0 : sin(now*4)*1.5*k
+        view.text = shown; view.k = k; view.fade = fade; view.tailX = (tipX-x)/size.width; view.age = age
         window.setFrame(NSRect(x: x,y: y,width: size.width,height: size.height),display: false); view.frame = NSRect(origin: .zero,size: size); view.needsDisplay = true
         if !window.isVisible { window.order(.above,relativeTo: panel.windowNumber) }
     }
@@ -1184,7 +1256,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         }
         guard let sky = thunderPanel, let view = sky.contentView as? ThunderView else { return }
         sky.setFrame(screen.frame,display: false); view.frame = NSRect(origin: .zero,size: screen.frame.size)
-        view.prepare(target: NSPoint(x: panel.frame.midX-screen.frame.minX,y: panel.frame.maxY-panel.frame.height*0.12-screen.frame.minY))
+        view.duration = thunderDuration
+        view.prepare(target: NSPoint(x: panel.frame.midX-screen.frame.minX,y: panel.frame.maxY-panel.frame.height*0.16-screen.frame.minY))
         thunderStart = ProcessInfo.processInfo.systemUptime; view.phase = 0; thunderBase = panel.frame.origin; thunderRumbled = false
         sky.order(.above,relativeTo: panel.windowNumber)
     }
@@ -1196,8 +1269,10 @@ final class Companion: NSObject, NSApplicationDelegate {
         for i in 0..<length {
             let t = Double(i)/Double(rate)
             brown = (brown + (Double.random(in: -1...1))*0.08).clamped(to: -1...1); low += (brown-low)*0.08
-            let envelope = min(1, t/0.05) * exp(-t*1.6) * (0.7+0.3*sin(t*17)) + (t > 0.35 && t < 0.6 ? 0.6 : 0)
-            let value = (low*3.2 + 0.35*sin(2 * .pi*42*t)) * envelope
+            // Sharp crack first, then the deep roll with a second peak under the next strikes.
+            let crack = t < 0.16 ? Double.random(in: -1...1) * exp(-t*28) : 0
+            let envelope = min(1, t/0.03) * exp(-t*1.4) * (0.7+0.3*sin(t*17)) + (t > 0.3 && t < 0.75 ? 0.7 : 0) + (t > 0.9 && t < 1.1 ? 0.4 : 0)
+            let value = (low*3.6 + 0.4*sin(2 * .pi*40*t)) * envelope + crack*0.9
             var sample = Int16(max(-1, min(1, value))*9000).littleEndian
             withUnsafeBytes(of: &sample) { pcm.append(contentsOf: $0) }
         }
@@ -1205,7 +1280,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         func text(_ s: String) { data.append(s.data(using: .ascii)!) }
         func number<T: FixedWidthInteger>(_ n: T) { var le = n.littleEndian; withUnsafeBytes(of: &le) { data.append(contentsOf: $0) } }
         text("RIFF"); number(UInt32(pcm.count+36)); text("WAVEfmt "); number(UInt32(16)); number(UInt16(1)); number(UInt16(1)); number(UInt32(rate)); number(UInt32(rate*2)); number(UInt16(2)); number(UInt16(16)); text("data"); number(UInt32(pcm.count)); data.append(pcm)
-        rumbleSound?.stop(); rumbleSound = NSSound(data: data); rumbleSound?.volume = 0.55; rumbleSound?.play(); ownAudio(rumbleSound)
+        rumbleSound?.stop(); rumbleSound = NSSound(data: data); rumbleSound?.volume = 0.8; rumbleSound?.play(); ownAudio(rumbleSound)
     }
     @objc func dance() { let length = Double(danceFrames.count)*0.14; play(6,duration: length); announce("Dance break",for: length); playSound(purr: true); say("pika-pika") }
     @objc func playBall() {
