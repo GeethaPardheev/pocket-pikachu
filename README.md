@@ -19,7 +19,7 @@ cd pocket-pikachu
 ./scripts/run.sh
 ```
 
-Or double-click `build/Pocket Pikachu.app`. Pikachu floats on the desktop with a paw icon in the menu bar and no Dock icon. Keep the app bundle together, and quit a running copy before rebuilding. The build is ad-hoc signed, not notarized, so macOS may ask you to renew the Accessibility permission after a rebuild or a move.
+Or double-click `build/Pocket Pikachu.app`. Pikachu floats on the desktop with a small tail icon in the menu bar and no Dock icon. Keep the app bundle together, and quit a running copy before rebuilding. The build is ad-hoc signed, not notarized, so macOS may ask you to renew the Accessibility permission after a rebuild or a move.
 
 ## Typing detection (optional)
 
@@ -33,13 +33,13 @@ If it still says permission is needed after a rebuild, remove the old entry and 
 
 ## What Pikachu does
 
-Everything is in the right-click menu, or under the paw in the menu bar.
+Everything is in the right-click menu, or under the tail icon in the menu bar.
 
 **Play**
 
 - **Play ball.** A Poké Ball appears at its paws. Pikachu swats it, the ball rolls off spinning and slowing down, and Pikachu gallops after it. Five to seven rolls per game, each 20–30% of the screen width in a random direction, then it trots back to exactly where it started. Dragging Pikachu or starting a focus session ends the game.
 - **Fun dance.** Eight seconds of bouncing through every pose in the sprite set.
-- **Thunderbolt.** A two-second attack with a “Pika… CHUUU!” caption.
+- **Thunderbolt.** A two-second attack with a “Pika… CHUUU!” caption. Lightning strikes down the whole screen onto Pikachu, three flashes on a click-through overlay, so it never gets in the way of your work. The focus reminder plays the pose without the screen flash.
 - **Play with cursor.** A short chase toward the pointer. Pikachu also does this on its own when the cursor moves nearby, at most once every 75 seconds. **Occasional cursor play** turns that off.
 - **Give a fish treat.** A fish appears; click it and Pikachu pounces on it and comes back. Uneaten fish vanish after 20 seconds.
 - **Pet Pocket Pikachu**, or rub the pointer over its head, for closed eyes and a heart.

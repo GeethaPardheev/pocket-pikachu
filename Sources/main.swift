@@ -263,6 +263,53 @@ final class TreatView: NSView {
     override func mouseDown(with event: NSEvent) { owner?.eatTreat() }
 }
 
+// Pikachu tail silhouette as a template menu-bar icon: narrow base, two steps, big flat-topped block.
+func tailIcon() -> NSImage {
+    let image = NSImage(size: NSSize(width: 18, height: 18)); image.lockFocus()
+    let s = 18.0/20
+    let pts: [(Double, Double)] = [(2,0),(5,0),(6,4),(10,3.5),(11.5,8.5),(20,8),(19,19.5),(8.5,20),(9,14),(5,14.5),(6,10),(1.5,10.5),(2.5,5)]
+    let path = NSBezierPath(); path.move(to: NSPoint(x: pts[0].0*s, y: pts[0].1*s)); for q in pts.dropFirst() { path.line(to: NSPoint(x: q.0*s, y: q.1*s)) }; path.close()
+    NSColor.black.setFill(); path.fill(); image.unlockFocus(); image.isTemplate = true
+    return image
+}
+
+final class ThunderView: NSView {
+    var phase = 0.0 { didSet { needsDisplay = true } }
+    var target = NSPoint.zero
+    var strikes: [[[NSPoint]]] = []   // three strikes, each a few jagged bolts from the top edge down to the target
+    static let times = [0.09, 0.32, 0.6], hold = 0.16
+    func prepare(target point: NSPoint) {
+        target = point; strikes = []
+        for _ in 0..<3 {
+            var bolts: [[NSPoint]] = []
+            for _ in 0..<Int.random(in: 2...3) {
+                var pts = [NSPoint(x: point.x + Double.random(in: -bounds.width*0.3...bounds.width*0.3), y: bounds.height)]
+                let steps = 10
+                for i in 1..<steps {
+                    let t = Double(i)/Double(steps)
+                    pts.append(NSPoint(x: pts[0].x + (point.x-pts[0].x)*t + Double.random(in: -60...60)*(1-t*0.6), y: bounds.height + (point.y-bounds.height)*t))
+                }
+                pts.append(point); bolts.append(pts)
+            }
+            strikes.append(bolts)
+        }
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.clear.setFill(); bounds.fill()
+        for (i, t0) in Self.times.enumerated() where phase >= t0 && phase < t0 + Self.hold {
+            let k = 1 - (phase - t0)/Self.hold   // 1 at the strike, fading to 0
+            NSColor(calibratedRed: 1, green: 0.98, blue: 0.85, alpha: 0.28*k*k).setFill(); bounds.fill()
+            for pts in strikes[i] {
+                let path = NSBezierPath(); path.move(to: pts[0]); for q in pts.dropFirst() { path.line(to: q) }
+                path.lineJoinStyle = .round; path.lineCapStyle = .round
+                NSColor(calibratedRed: 1, green: 0.9, blue: 0.3, alpha: 0.35*k).setStroke(); path.lineWidth = 22; path.stroke()
+                NSColor(calibratedRed: 1, green: 0.95, blue: 0.6, alpha: 0.8*k).setStroke(); path.lineWidth = 7; path.stroke()
+                NSColor(calibratedWhite: 1, alpha: k).setStroke(); path.lineWidth = 2.5; path.stroke()
+            }
+        }
+    }
+}
+
 final class BallView: NSView {
     var roll = 0.0 { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
@@ -483,6 +530,9 @@ final class Companion: NSObject, NSApplicationDelegate {
     var focusReminderItem: NSMenuItem!
     var ballGame: BallGame?
     var ballPanel: PetPanel?
+    var thunderPanel: PetPanel?
+    var thunderStart = 0.0
+    let thunderDuration = 1.7
     var sounds = false
     var home: PetHome = .cushion
     var lastMouse = NSPoint.zero
@@ -573,7 +623,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         walk.next = start + 1200; focusReminder.next = start + 1800
         buildMenu()
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        status.button?.image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Pocket Pikachu")
+        status.button?.image = tailIcon(); status.button?.toolTip = "Pocket Pikachu"
         status.menu = menu
         // Read the saved position before defaults can overwrite it.
         var restored = false
@@ -666,7 +716,7 @@ final class Companion: NSObject, NSApplicationDelegate {
                 timer.invalidate()
                 precondition(moved && panel.frame.origin == home && ballPanel?.isVisible == false && (5...7).contains(runs), "ball game moved=\(moved) runs=\(runs) home=\(panel.frame.origin == home)")
                 dance(); tick(); precondition(pet.dancing && pet.sprite === images["6-0"])
-                thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!")
+                thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!" && thunderPanel?.isVisible == true && (thunderPanel?.contentView as? ThunderView)?.strikes.count == 3)
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
                 precondition(panel.frame.width == 384 || panel.frame.width == 192)
                 huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384)
@@ -767,6 +817,10 @@ final class Companion: NSObject, NSApplicationDelegate {
                 panel.setFrameOrigin(trip.position(at: now))
                 if trip.kind == .treat && now-trip.start > trip.duration*0.45 { treatPanel?.orderOut(nil) }
             }
+        }
+        if let sky = thunderPanel, sky.isVisible {
+            let phase = (now-thunderStart)/thunderDuration
+            if phase >= 1 { sky.orderOut(nil) } else { (sky.contentView as? ThunderView)?.phase = phase }
         }
         if var game = ballGame {
             if !game.finished(at: now) { panel.setFrameOrigin(game.position(at: now)); moveBall(game,at: now) }
@@ -958,7 +1012,22 @@ final class Companion: NSObject, NSApplicationDelegate {
         window.orderFrontRegardless(); treatExpires = ProcessInfo.processInfo.systemUptime+20
         announce("Click the fish",for: 3)
     }
-    @objc func thunderbolt() { play(8,duration: 1.7); announce("Pika… CHUUU!",for: 1.7); playSound(purr: false) }
+    @objc func thunderbolt() { play(8,duration: thunderDuration); announce("Pika… CHUUU!",for: thunderDuration); playSound(purr: false); strikeScreen() }
+    // Full-screen click-through lightning on the screen Pikachu is on, aimed at its head.
+    func strikeScreen() {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(panel.frame.center) }) ?? NSScreen.main else { return }
+        if thunderPanel == nil {
+            let sky = PetPanel(contentRect: screen.frame,styleMask: [.borderless,.nonactivatingPanel],backing: .buffered,defer: false)
+            sky.isOpaque = false; sky.backgroundColor = .clear; sky.hasShadow = false; sky.level = .floating; sky.ignoresMouseEvents = true
+            sky.hidesOnDeactivate = false; sky.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]; sky.isReleasedWhenClosed = false
+            sky.contentView = ThunderView(frame: NSRect(origin: .zero,size: screen.frame.size)); thunderPanel = sky
+        }
+        guard let sky = thunderPanel, let view = sky.contentView as? ThunderView else { return }
+        sky.setFrame(screen.frame,display: false); view.frame = NSRect(origin: .zero,size: screen.frame.size)
+        view.prepare(target: NSPoint(x: panel.frame.midX-screen.frame.minX,y: panel.frame.maxY-panel.frame.height*0.12-screen.frame.minY))
+        thunderStart = ProcessInfo.processInfo.systemUptime; view.phase = 0
+        sky.order(.above,relativeTo: panel.windowNumber)
+    }
     @objc func dance() { let length = Double(danceFrames.count)*0.14; play(6,duration: length); announce("Dance break",for: length); playSound(purr: true) }
     @objc func playBall() {
         guard excursion == nil, ballGame == nil else { return }
