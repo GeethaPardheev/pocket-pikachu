@@ -153,7 +153,6 @@ final class PetView: NSView {
     var dancing = false
     var headphones = false
     var gazeDirection: Int? = nil
-    var headphonesFitAvailable = true
     var clock = 0.0
     var caption: String? = nil
     var sprite: NSImage? { didSet { needsDisplay = true } }
@@ -184,36 +183,6 @@ final class PetView: NSView {
             body.size.height -= 8*sy; body.origin.y += lift*6*sy
         }
         sprite?.draw(in: body, from: .zero, operation: .sourceOver, fraction: 1)
-        if headphones && headphonesFitAvailable {
-            // Ear-cup centers in each original 192x208 sprite, bottom-left coordinates.
-            // The far cup is hidden for profile poses; both cups share the body transform.
-            let fits: [(Double,Double,Double,Double,Bool)] = [
-                (43,183,125,183,false), (48,184,106,194,true),
-                (49,180,113,193,true), (57,180,119,193,true),
-                (96,183,119,181,true), (82,147,137,179,true),
-                (63,144,135,171,true), (73,133,148,158,false),
-                (39,158,125,158,false), (33,152,107,141,false),
-                (38,185,108,157,true), (60,184,111,160,true),
-                (43,183,94,166,true), (62,184,113,176,true),
-                (65,187,121,179,true), (68,188,135,181,true)
-            ]
-            let f = gazeDirection.map { fits[$0] } ?? (43,181,128,181,false)
-            let bx = body.width/192, by = body.height/208
-            func point(_ x: Double,_ y: Double) -> NSPoint { NSPoint(x: body.minX+x*bx,y: body.minY+y*by) }
-            let band = NSBezierPath()
-            band.move(to: point(f.0,f.1))
-            band.curve(to: point(f.2,f.3),controlPoint1: point(f.0-3,max(f.1,f.3)+(f.4 ? 10 : 22)),controlPoint2: point(f.2+3,max(f.1,f.3)+(f.4 ? 10 : 22)))
-            NSColor(calibratedWhite: 0.19,alpha: 1).setStroke(); band.lineWidth = 6*bx; band.stroke()
-            let visible = f.4 ? [(gazeDirection! < 8 ? f.0 : f.2,gazeDirection! < 8 ? f.1 : f.3)] : [(f.0,f.1),(f.2,f.3)]
-            for (x,y) in visible {
-                let center = point(x,y)
-                let cup = NSRect(x: center.x-9*bx,y: center.y-13*by,width: 18*bx,height: 26*by)
-                NSColor(calibratedWhite: 0.16,alpha: 1).setFill()
-                NSBezierPath(roundedRect: cup,xRadius: 6*bx,yRadius: 6*by).fill()
-                NSColor.systemTeal.setFill()
-                NSBezierPath(roundedRect: cup.insetBy(dx: 4*bx,dy: 4*by),xRadius: 3*bx,yRadius: 3*by).fill()
-            }
-        }
         if home == .box {
             NSColor(calibratedRed: 0.76, green: 0.54, blue: 0.32, alpha: 1).setFill()
             NSBezierPath(roundedRect: NSRect(x: 10*sx,y: 0,width: 172*sx,height: 39*sy),xRadius: 3*sx,yRadius: 3*sy).fill()
@@ -561,6 +530,10 @@ final class Companion: NSObject, NSApplicationDelegate {
                 images[key] = image
             }
         }
+        // Optional music-mode frames with real headphones; missing files just mean no swap.
+        for (row, n) in [(0, 6), (9, 8)] { for col in 0..<n where images["h\(row)-\(col)"] == nil {
+            if let image = NSImage(contentsOf: resources.appendingPathComponent("frames/h\(row)-\(col).png")) { images["h\(row)-\(col)"] = image }
+        } }
         panel = PetPanel(contentRect: NSRect(x: 0, y: 0, width: 154, height: 167), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
         panel.level = .floating; panel.hidesOnDeactivate = false
@@ -695,6 +668,7 @@ final class Companion: NSObject, NSApplicationDelegate {
                 showBall(); moveBall(BallGame(origin: panel.frame.origin,start: 0,runs: 1),at: 0); precondition(ballPanel?.frame.width == 84 && ballPanel?.frame.height == 76); ballPanel?.orderOut(nil)
                 large(); precondition(pet.frame.width == 192)
                 previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] } && pet.typingPhase == nil)
+                toggleMusic(); tick(); precondition((0..<8).contains { pet.sprite === images["h9-\($0)"] }); typing.until = 0; tick(); precondition((0..<6).contains { pet.sprite === images["h0-\($0)"] }); toggleMusic()
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
             }
@@ -829,8 +803,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         if now < focusUntil { pet.caption = "Hey. Time to focus." }
         pet.dancing = dancing
         pet.gazeDirection = nil
-        pet.headphonesFitAvailable = row == 0
-        pet.sprite = images["\(row)-\(col)"]
+        // Music mode swaps in the headphone render when one exists for this frame.
+        pet.sprite = (pet.headphones ? images["h\(row)-\(col)"] : nil) ?? images["\(row)-\(col)"]
     }
     @objc func toggleTerminal() {
         terminalEnabled.toggle(); UserDefaults.standard.set(terminalEnabled,forKey: "terminalEnabled")

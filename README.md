@@ -58,7 +58,7 @@ Everything is in the right-click menu, or under the paw in the menu bar.
 - **Typing.** Pikachu sits behind a little laptop and types with alternating paws; the faster you type, the faster it goes, up to “Turbo paws”. Stops 0.7 seconds after the last key.
 - **Naps** after 3 minutes without mouse or keyboard activity; any movement wakes it. **Nap now** forces one. Music mode prevents automatic naps.
 - **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
-- **Headphones.** Appear automatically while your Mac is playing audio (it can't tell music from notifications), or manually via music mode. The cups were positioned for the original cat sprites and can sit oddly on Pikachu.
+- **Headphones.** Pikachu puts on a pair of black over-ear headphones while your Mac is playing audio (it can't tell music from notifications), or when you turn on music mode. They show in the idle and typing poses; other poses play without them.
 - **Sounds.** Optional purr and chime, off by default.
 - **Size.** Small, Large (the default), Extra large, Huge. A chosen size lasts for the session. **Reset position** brings Pikachu back on screen.
 - **Cursor tracking.** This sprite set has no head-turn frames, so Pikachu idles and blinks instead of following the pointer. **Pause cursor following** therefore has no visible effect.
@@ -127,7 +127,7 @@ None of these prove that macOS has granted Accessibility; only you can check tha
 ## Source layout
 
 - `Sources/main.swift`: window, drawing, input monitoring, behaviour, terminals, self-tests. `Sources/GeminiVoice.swift`: voice.
-- `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9 typing at the laptop, 10 spare slots that reuse idle.
+- `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9 typing at the laptop, 10 spare slots that reuse idle. `h0-*` and `h9-*` are the same idle and typing poses wearing headphones.
 - `Resources/terminal/`: the xterm.js page and Python PTY helper. `integrations/`: the zsh hook and the `pikachu-claude` launcher. `scripts/`: build, run, test.
 
 ## Artwork and trademark
