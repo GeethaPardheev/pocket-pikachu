@@ -51,12 +51,20 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 - **Walk**, every 20 minutes: “Stand up & take a short walk” for 30 seconds, even during focus or naps.
 - **Stretch**, every 30 minutes while awake, with a paw-up stretch. Deferred during focus and sleep. **Stretch now** triggers it.
 
-**Focus timer.** Start a 25-minute or 5-minute session, or a 10-second preview. Pikachu naps with a countdown and jumps when it ends. Cancel from the menu.
+**Work Mode and Study Mode.** Structured focus with Pikachu working beside you.
+
+- **Work Mode** runs 50-minute focus blocks with 10-minute breaks. **Study Mode** runs 25-minute Pomodoros with 5-minute breaks and a 15-minute long break after every fourth.
+- During a block Pikachu sits at its laptop working, stays quiet (no cursor chases, no naps), and holds walk and stretch reminders until the break. Every 10 minutes (5 in Study Mode) a small bubble says how long is left. If you go idle for 3 minutes it asks “Pika? Still there?”.
+- Finishing a block earns a jump and “Session done! Break time.”; a long break gets a dance. When the break ends Pikachu says “Break's over. Back to it!” and starts the next block. **Stop Work / Study Mode** ends it.
+- The menu shows the live countdown and how many sessions you've finished today; the count survives relaunches and resets at midnight.
+
+**Focus timer.** The simple version: a 25-minute or 5-minute session, or a 10-second preview. Pikachu naps with a countdown and jumps when it ends. Cancel from the menu.
 
 **Everyday behaviour**
 
 - **Typing.** Pikachu sits behind a little laptop and types with alternating paws; the faster you type, the faster it goes, up to “Turbo paws”. Stops 0.7 seconds after the last key.
-- **Naps** after 3 minutes without mouse or keyboard activity; any movement wakes it. **Nap now** forces one. Music mode prevents automatic naps.
+- **Naps** after 3 minutes without mouse or keyboard activity; any movement wakes it. **Nap now** forces one. Music mode prevents automatic naps. Pikachu sleeps in its own little wooden bed under a blue lightning-bolt blanket, breathing gently.
+- **Bedtime.** Pick 9 pm, 10 pm, 11 pm or midnight in the Bedtime submenu. From then until 6 am Pikachu tells you it's bedtime, then goes to bed whenever you've been still for a minute. Off by default; a running Work or Study block overrides it.
 - **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
 - **Headphones.** Pikachu puts on a pair of black over-ear headphones while your Mac is playing audio (it can't tell music from notifications), or when you turn on music mode. They show in the idle and typing poses; other poses play without them.
 - **Voice.** Pikachu cries out loud in a squeaky mascot voice: “Pika!” when you click it, “Pika pika!” when it jumps, dances or finishes a game, “Pikachu!” for focus reminders, “Pika pi!” for walk reminders, a sleepy “Pikaaa…” for stretches and naps, a curious “Pi-ka?” when it chases or a terminal needs you, a happy “Chaaa~” when petted or fed, and a full “Pika… CHUUU!” on Thunderbolt. On by default; **Pikachu voice** in the menu turns it off. The clips were generated with Gemini's speech model, pitched up; they are not recordings from the anime.
@@ -69,7 +77,7 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 ## Good to know
 
 - Reminders fire only while the app is running. There are no background jobs or login items, and restarting resets every countdown. Focus timing uses system uptime, so it is not an alarm while the Mac sleeps.
-- Saved between launches: position, typing toggle, nap, play and reminder toggles, voice, sounds, home, automatic headphones. Session only: size, manual headphones, cursor pause, a running focus timer.
+- Saved between launches: position, typing toggle, nap, play and reminder toggles, voice, sounds, home, automatic headphones, bedtime, and today's session count. Session only: size, manual headphones, cursor pause, a running focus timer.
 - Two Pikachus means two copies are running; quit one. There is no single-instance check.
 
 ## Privacy
@@ -130,7 +138,7 @@ None of these prove that macOS has granted Accessibility; only you can check tha
 ## Source layout
 
 - `Sources/main.swift`: window, drawing, input monitoring, behaviour, terminals, self-tests. `Sources/GeminiVoice.swift`: voice.
-- `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9 typing at the laptop, 10 spare slots that reuse idle. `h0-*` and `h9-*` are the same idle and typing poses wearing headphones.
+- `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9 typing at the laptop, 10 spare slots that reuse idle. `h0-*` and `h9-*` are the same idle and typing poses wearing headphones; `s-0` to `s-3` are Pikachu asleep in bed.
 - `Resources/voice/`: eight short WAV cries. `Resources/terminal/`: the xterm.js page and Python PTY helper. `integrations/`: the zsh hook and the `pikachu-claude` launcher. `scripts/`: build, run, test.
 
 ## Artwork and trademark

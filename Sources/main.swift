@@ -732,6 +732,27 @@ final class Companion: NSObject, NSApplicationDelegate {
     var stretchUntil = 0.0
     var focusItem: NSMenuItem!
     var sleepItem: NSMenuItem!
+    enum FocusMode { case off, work, study }
+    var mode = FocusMode.off
+    var modeFocusing = false
+    var modeEnd = 0.0
+    var modeNextTip = 0.0
+    var modeIdleNudged = false
+    var modeSessions = 0
+    var modeItem: NSMenuItem!
+    var bedtimeHour = UserDefaults.standard.object(forKey: "bedtimeHour") as? Int ?? -1   // -1 = off
+    var bedtimeItems: [Int: NSMenuItem] = [:]
+    var bedtimeAnnounced = ""
+    var focusing: Bool { mode != .off && modeFocusing }
+    var modeFocusLength: Double { mode == .work ? 50*60 : 25*60 }
+    var modeTipInterval: Double { mode == .work ? 600 : 300 }
+    var bedtimeNow: Bool {
+        guard bedtimeHour >= 0 else { return false }
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour < 6 || (bedtimeHour > 0 && hour >= bedtimeHour)
+    }
+    func today() -> String { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: Date()) }
+    func saveSessions() { UserDefaults.standard.set(modeSessions,forKey: "modeSessions"); UserDefaults.standard.set(today(),forKey: "modeDay") }
     var mischiefItem: NSMenuItem!
     var breakItem: NSMenuItem!
     var soundItem: NSMenuItem!
@@ -772,6 +793,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         for name in ["pika","pika-pika","pikachu","thunderbolt","chaa","pika-question","pika-pi","sleepy"] {
             if let sound = NSSound(contentsOf: resources.appendingPathComponent("voice/\(name).wav"), byReference: false) { voiceClips[name] = sound }
         }
+        // Asleep in bed, four breathing frames; without them naps fall back to the idle pose.
+        for col in 0..<4 { if let image = NSImage(contentsOf: resources.appendingPathComponent("frames/s-\(col).png")) { images["s-\(col)"] = image } }
         // Optional music-mode frames with real headphones; missing files just mean no swap.
         for (row, n) in [(0, 6), (9, 8)] { for col in 0..<n where images["h\(row)-\(col)"] == nil {
             if let image = NSImage(contentsOf: resources.appendingPathComponent("frames/h\(row)-\(col).png")) { images["h\(row)-\(col)"] = image }
@@ -802,6 +825,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         breakReminders = prefs.object(forKey: "breakReminders") as? Bool ?? true
         walkReminders = prefs.object(forKey: "walkReminders") as? Bool ?? true
         focusReminders = prefs.object(forKey: "focusReminders") as? Bool ?? true
+        if prefs.string(forKey: "modeDay") == today() { modeSessions = prefs.integer(forKey: "modeSessions") }
         sounds = prefs.bool(forKey: "sounds")
         home = PetHome(rawValue: prefs.string(forKey: "home") ?? "cushion") ?? .cushion
         let start = ProcessInfo.processInfo.systemUptime
@@ -919,7 +943,12 @@ final class Companion: NSObject, NSApplicationDelegate {
                 showBall(); moveBall(BallGame(origin: panel.frame.origin,start: 0,runs: 1),at: 0); precondition(ballPanel?.frame.width == 84 && ballPanel?.frame.height == 76); ballPanel?.orderOut(nil)
                 large(); precondition(pet.frame.width == 192)
                 previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] || pet.sprite === images["h9-\($0)"] } && pet.typingPhase == nil)
-                toggleMusic(); tick(); precondition((0..<8).contains { pet.sprite === images["h9-\($0)"] }); typing.until = 0; tick(); precondition((0..<6).contains { pet.sprite === images["h0-\($0)"] }); toggleMusic()
+                let savedSessions = modeSessions; typing.until = 0
+                startWork(); tick(); precondition(mode == .work && modeFocusing && (0..<8).contains { pet.sprite === images["9-\($0)"] || pet.sprite === images["h9-\($0)"] } && modeItem.title.hasPrefix("Work Mode · focus"))
+                modeEnd = ProcessInfo.processInfo.systemUptime-1; tick(); precondition(!modeFocusing && modeSessions == savedSessions+1 && modeItem.title.contains("break"))
+                stopMode(); modeSessions = savedSessions; saveSessions(); precondition(mode == .off)
+                nap(); actionUntil = 0; tick(); precondition(images["s-0"] != nil && (0..<4).contains { pet.sprite === images["s-\($0)"] } && pet.home == .none && pet.snoozing); life.forcedNap = false
+                previewTyping(); toggleMusic(); tick(); precondition((0..<8).contains { pet.sprite === images["h9-\($0)"] }); typing.until = 0; tick(); precondition((0..<6).contains { pet.sprite === images["h0-\($0)"] }); toggleMusic()
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
             }
@@ -945,6 +974,11 @@ final class Companion: NSObject, NSApplicationDelegate {
         add("Try a 10-second focus", #selector(testFocus))
         add("Cancel focus", #selector(cancelFocus))
         menu.addItem(.separator())
+        add("Work Mode · 50 min focus, 10 min break", #selector(startWork))
+        add("Study Mode · 25 / 5 Pomodoro, long break every 4th", #selector(startStudy))
+        add("Stop Work / Study Mode", #selector(stopMode))
+        modeItem = NSMenuItem(title: "Mode: off",action: nil,keyEquivalent: ""); menu.addItem(modeItem)
+        menu.addItem(.separator())
         sleepItem = add("Auto nap after 3 minutes", #selector(toggleSleep))
         mischiefItem = add("Occasional cursor play", #selector(toggleMischief))
         walkItem = add("Walk reminders every 20 minutes", #selector(toggleWalk))
@@ -959,6 +993,11 @@ final class Companion: NSObject, NSApplicationDelegate {
         for (name, style) in [("No home",PetHome.none),("Cushion",PetHome.cushion),("Cardboard box",PetHome.box)] {
             let item = add(name,#selector(selectHome(_:))); item.representedObject = style.rawValue; homeItems[style] = item
         }
+        let bedtime = NSMenuItem(title: "Bedtime",action: nil,keyEquivalent: ""); let bedtimeMenu = NSMenu(title: "Bedtime")
+        for (name, hour) in [("Off",-1),("9 pm",21),("10 pm",22),("11 pm",23),("Midnight",0)] {
+            let item = NSMenuItem(title: name,action: #selector(selectBedtime(_:)),keyEquivalent: ""); item.target = self; item.representedObject = hour; bedtimeMenu.addItem(item); bedtimeItems[hour] = item
+        }
+        bedtime.submenu = bedtimeMenu; menu.addItem(bedtime)
         menu.addItem(.separator())
         pauseItem = add("Pause cursor following", #selector(togglePause))
         typingItem = add("Typing reactions", #selector(toggleTyping))
@@ -992,10 +1031,14 @@ final class Companion: NSObject, NSApplicationDelegate {
         } else if !face.contains(point) { pettingTravel = 0 }
         lastMouse = point
         if life.completeFocus(at: now) { announce("Focus finished. Nice work!",for: 6); play(4,duration: 1.5); playSound(purr: false); say("pikachu") }
-        if walk.due(at: now,enabled: walkReminders) { remindWalk() }
-        if focusReminder.due(at: now,enabled: focusReminders) && life.focusEnd == nil { remindFocus() }
-        let sleeping = life.sleeping(at: now,autoSleep: autoSleep && !musicMode && !audioActive)
-        if life.breakDue(at: now,enabled: breakReminders,sleeping: sleeping) { stretch() }
+        tickMode(at: now)
+        // Walk and stretch reminders wait for the break while a Work or Study block is running.
+        if walk.due(at: now,enabled: walkReminders) && !focusing { remindWalk() }
+        if focusReminder.due(at: now,enabled: focusReminders) && life.focusEnd == nil && !focusing { remindFocus() }
+        if bedtimeNow && bedtimeAnnounced != today() { bedtimeAnnounced = today(); announce("Pikaaa… bedtime. You too.",for: 8); say("sleepy") }
+        let inBed = bedtimeNow && !focusing && now-life.lastActivity > 60
+        let sleeping = life.sleeping(at: now,autoSleep: autoSleep && !musicMode && !audioActive && !focusing) || inBed
+        if life.breakDue(at: now,enabled: breakReminders,sleeping: sleeping) && !focusing { stretch() }
         if let end = life.focusEnd {
             let seconds = max(0,Int(ceil(end-now)))
             focusItem.title = String(format: "Focus %02d:%02d — click to cancel",seconds/60,seconds%60)
@@ -1027,7 +1070,7 @@ final class Companion: NSObject, NSApplicationDelegate {
             else if game.runsLeft > 0 { game.run(to: ballTarget(from: game.to,screenOf: game.origin),at: now); ballGame = game }
             else { game.goHome(at: now); ballGame = game }
         }
-        if mischief && !sleeping && life.focusEnd == nil && !typing.active(at: now) && excursion == nil && ballGame == nil && now > actionUntil && now > pettingUntil && now-lastChase > 75 && distance > 1 && NSEvent.pressedMouseButtons == 0 {
+        if mischief && !sleeping && !focusing && life.focusEnd == nil && !typing.active(at: now) && excursion == nil && ballGame == nil && now > actionUntil && now > pettingUntil && now-lastChase > 75 && distance > 1 && NSEvent.pressedMouseButtons == 0 {
             let range = hypot(point.x-panel.frame.midX,point.y-panel.frame.midY)
             if range > 65 && range < 240 { startChase() }
         }
@@ -1038,7 +1081,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         let goal = home == .box && (sleeping || now < pettingUntil) ? 1.0 : 0.0
         pet.homeDepth += (goal-pet.homeDepth)*0.12
         pet.caption = now < noticeUntil ? notice : nil
-        var row = 0, col = Int(now / 0.2) % 6, dancing = false
+        var row = 0, col = Int(now / 0.2) % 6, dancing = false, sleepFrame: Int? = nil
         if let game = ballGame {
             if game.waiting(at: now) { row = 4; col = min(4,Int((now-game.start+game.pause)/0.07)) }
             else { row = game.to.x < game.from.x ? 2 : 1; col = Int(now/0.1)%8 }
@@ -1062,7 +1105,10 @@ final class Companion: NSObject, NSApplicationDelegate {
             if cadence < 0.1 { pet.caption = "Turbo paws" }
         } else if sleeping {
             row = 0; col = 1; pet.snoozing = true
+            if images["s-0"] != nil { sleepFrame = Int(now / 0.7) % 4 }
             if let end = life.focusEnd { pet.caption = "Focus · \(max(0,Int(ceil((end-now)/60)))) min" }
+        } else if focusing {
+            row = 9; col = Int(now / 0.45) % counts[9]   // working at the laptop beside you
         }
         if now < terminalUntil { pet.caption = terminalMessage }
         if now < walkUntil { pet.caption = "Stand up & take a short walk" }
@@ -1071,8 +1117,9 @@ final class Companion: NSObject, NSApplicationDelegate {
         pet.gazeDirection = nil
         let screenMidX = (NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main)?.frame.midX ?? panel.frame.midX
         pet.mirrored = row != 1 && row != 2 && panel.frame.midX < screenMidX   // running rows already carry their direction
-        // Music mode swaps in the headphone render when one exists for this frame.
-        pet.sprite = (pet.headphones ? images["h\(row)-\(col)"] : nil) ?? images["\(row)-\(col)"]
+        // Asleep: the bed replaces the pose and the home. Music mode swaps in the headphone render when one exists.
+        if sleepFrame != nil { pet.home = .none }
+        pet.sprite = sleepFrame.map { images["s-\($0)"] } ?? (pet.headphones ? images["h\(row)-\(col)"] : nil) ?? images["\(row)-\(col)"]
         updateBubble(pet.caption, at: now)
     }
     @objc func toggleTerminal() {
@@ -1133,6 +1180,40 @@ final class Companion: NSObject, NSApplicationDelegate {
         actionUntil = 0; typing.until = 0; treatPanel?.orderOut(nil)
         announce("Focus together",for: 2)
     }
+    @objc func startWork() { startMode(.work) }
+    @objc func startStudy() { startMode(.study) }
+    func startMode(_ chosen: FocusMode) {
+        if life.focusEnd != nil { cancelFocus() }
+        beginDrag(); let now = ProcessInfo.processInfo.systemUptime
+        mode = chosen; modeFocusing = true; modeEnd = now+modeFocusLength; modeNextTip = now+modeTipInterval; modeIdleNudged = false; actionUntil = 0
+        announce(chosen == .work ? "Work Mode. Let's go!" : "Study Mode. Let's go!",for: 3); say("pikachu"); syncOptions()
+    }
+    @objc func stopMode() { guard mode != .off else { return }; mode = .off; modeFocusing = false; announce("Mode off. Pika.",for: 2); syncOptions() }
+    // Work/Study blocks: celebrate the end of a block, run the break, nudge when you drift, count sessions per day.
+    func tickMode(at now: Double) {
+        guard mode != .off else { modeItem?.title = modeSessions > 0 ? "Mode: off · \(modeSessions) sessions done today" : "Mode: off"; return }
+        if now >= modeEnd {
+            if modeFocusing {
+                modeSessions += 1; saveSessions(); modeFocusing = false; life.activity(at: now)
+                let long = mode == .study && modeSessions % 4 == 0
+                modeEnd = now + (mode == .work ? 600 : long ? 900 : 300)
+                announce(long ? "4 in a row! Long break. Pika pika!" : "Session done! Break time.",for: 6); say("pika-pika")
+                if long { dance() } else { play(4,duration: 1.5) }
+            } else {
+                modeFocusing = true; modeEnd = now+modeFocusLength; modeNextTip = now+modeTipInterval; modeIdleNudged = false
+                announce("Break's over. Back to it!",for: 4); say("pika-pi"); play(3,duration: 1.5)
+            }
+        } else if modeFocusing {
+            if now >= modeNextTip { modeNextTip += modeTipInterval; announce("\(Int(ceil((modeEnd-now)/60))) min left. Pika.",for: 4) }
+            if now-life.lastActivity > 180 { if !modeIdleNudged { modeIdleNudged = true; announce("Pika? Still there?",for: 5); say("pika-question"); play(7,duration: 2) } }
+            else { modeIdleNudged = false }
+        }
+        let seconds = max(0,Int(ceil(modeEnd-now)))
+        modeItem?.title = String(format: "%@ · %@ %02d:%02d · %d done today",mode == .work ? "Work Mode" : "Study Mode",modeFocusing ? "focus" : "break",seconds/60,seconds%60,modeSessions)
+    }
+    @objc func selectBedtime(_ sender: NSMenuItem) {
+        bedtimeHour = sender.representedObject as? Int ?? -1; UserDefaults.standard.set(bedtimeHour,forKey: "bedtimeHour"); bedtimeAnnounced = ""; syncOptions()
+    }
     @objc func startFocus() { if life.focusEnd != nil { cancelFocus() } else { startTimer(25*60) } }
     @objc func shortFocus() { startTimer(5*60) }
     @objc func testFocus() { startTimer(10) }
@@ -1191,6 +1272,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         sleepItem?.state = autoSleep ? .on : .off; mischiefItem?.state = mischief ? .on : .off
         breakItem?.state = breakReminders ? .on : .off; soundItem?.state = sounds ? .on : .off; voiceItem?.state = voiceEnabled ? .on : .off
         for (style,item) in homeItems { item.state = style == home ? .on : .off }
+        for (hour,item) in bedtimeItems { item.state = hour == bedtimeHour ? .on : .off }
     }
     func clampedOrigin(_ point: NSPoint) -> NSPoint {
         let screen = NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main
