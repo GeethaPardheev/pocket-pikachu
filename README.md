@@ -59,6 +59,7 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 - **Naps** after 3 minutes without mouse or keyboard activity; any movement wakes it. **Nap now** forces one. Music mode prevents automatic naps.
 - **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
 - **Headphones.** Pikachu puts on a pair of black over-ear headphones while your Mac is playing audio (it can't tell music from notifications), or when you turn on music mode. They show in the idle and typing poses; other poses play without them.
+- **Voice.** Pikachu cries out loud in a squeaky mascot voice: “Pika!” when you click it, “Pika pika!” when it jumps, dances or finishes a game, “Pikachu!” for focus reminders, “Pika pi!” for walk reminders, a sleepy “Pikaaa…” for stretches and naps, a curious “Pi-ka?” when it chases or a terminal needs you, a happy “Chaaa~” when petted or fed, and a full “Pika… CHUUU!” on Thunderbolt. On by default; **Pikachu voice** in the menu turns it off. The clips were generated with Gemini's speech model, pitched up; they are not recordings from the anime.
 - **Sounds.** Optional purr and chime, off by default.
 - **Speech.** Whatever Pikachu says appears in a yellow comic speech bubble above its head. It pops in with a bounce, bobs while shown, fades out, and scales with Pikachu's size.
 - **Facing.** Pikachu always faces into the screen: on the left half of the display its poses are mirrored to face right.
@@ -68,7 +69,7 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 ## Good to know
 
 - Reminders fire only while the app is running. There are no background jobs or login items, and restarting resets every countdown. Focus timing uses system uptime, so it is not an alarm while the Mac sleeps.
-- Saved between launches: position, typing toggle, nap, play and reminder toggles, sounds, home, automatic headphones. Session only: size, manual headphones, cursor pause, a running focus timer.
+- Saved between launches: position, typing toggle, nap, play and reminder toggles, voice, sounds, home, automatic headphones. Session only: size, manual headphones, cursor pause, a running focus timer.
 - Two Pikachus means two copies are running; quit one. There is no single-instance check.
 
 ## Privacy
@@ -130,7 +131,7 @@ None of these prove that macOS has granted Accessibility; only you can check tha
 
 - `Sources/main.swift`: window, drawing, input monitoring, behaviour, terminals, self-tests. `Sources/GeminiVoice.swift`: voice.
 - `Resources/frames/`: 73 PNGs named `row-col.png`. Row 0 idle, 1 run right, 2 run left, 3 wave, 4 jump, 5 sad, 6 waiting, 7 busy, 8 Thunderbolt, 9 typing at the laptop, 10 spare slots that reuse idle. `h0-*` and `h9-*` are the same idle and typing poses wearing headphones.
-- `Resources/terminal/`: the xterm.js page and Python PTY helper. `integrations/`: the zsh hook and the `pikachu-claude` launcher. `scripts/`: build, run, test.
+- `Resources/voice/`: eight short WAV cries. `Resources/terminal/`: the xterm.js page and Python PTY helper. `integrations/`: the zsh hook and the `pikachu-claude` launcher. `scripts/`: build, run, test.
 
 ## Artwork and trademark
 

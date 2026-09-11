@@ -237,7 +237,7 @@ final class PetView: NSView {
     }
     override func mouseUp(with event: NSEvent) {
         if moved { owner?.screenChanged(); owner?.savePosition() }
-        else if event.clickCount > 1 { owner?.play(4, duration: 0.9) }
+        else if event.clickCount > 1 { owner?.jump() }
         else { owner?.wave() }
     }
     override func rightMouseDown(with event: NSEvent) {
@@ -573,6 +573,10 @@ final class Companion: NSObject, NSApplicationDelegate {
     var thunderStart = 0.0
     let thunderDuration = 1.7
     var sounds = false
+    var voiceEnabled = UserDefaults.standard.object(forKey: "voiceEnabled") as? Bool ?? true
+    var voiceItem: NSMenuItem!
+    var voiceClips: [String: NSSound] = [:]
+    var voiceSound: NSSound?
     var home: PetHome = .cushion
     var lastMouse = NSPoint.zero
     var pettingTravel = 0.0
@@ -623,6 +627,10 @@ final class Companion: NSObject, NSApplicationDelegate {
                 }
                 images[key] = image
             }
+        }
+        // Pikachu's cries; a missing clip just stays silent.
+        for name in ["pika","pika-pika","pikachu","thunderbolt","chaa","pika-question","pika-pi","sleepy"] {
+            if let sound = NSSound(contentsOf: resources.appendingPathComponent("voice/\(name).wav"), byReference: false) { voiceClips[name] = sound }
         }
         // Optional music-mode frames with real headphones; missing files just mean no swap.
         for (row, n) in [(0, 6), (9, 8)] { for col in 0..<n where images["h\(row)-\(col)"] == nil {
@@ -755,6 +763,7 @@ final class Companion: NSObject, NSApplicationDelegate {
                 timer.invalidate()
                 precondition(moved && panel.frame.origin == home && ballPanel?.isVisible == false && (5...7).contains(runs), "ball game moved=\(moved) runs=\(runs) home=\(panel.frame.origin == home)")
                 dance(); tick(); precondition(pet.dancing && pet.sprite === images["6-0"])
+                precondition(voiceClips.count == 8); say("pika"); precondition(voiceSound?.isPlaying == true); voiceSound?.stop()
                 thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!" && thunderPanel?.isVisible == true && (thunderPanel?.contentView as? ThunderView)?.strikes.count == 3)
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
                 precondition(bubblePanel?.isVisible == true && (bubblePanel?.contentView as? SpeechBubbleView)?.text == "Hey. Time to focus." && (bubblePanel?.frame.width ?? 0) > panel.frame.width*0.6)
@@ -802,6 +811,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         breakItem = add("Stretch reminders every 30 minutes", #selector(toggleBreaks))
         musicItem = add("Headphones — manual music mode", #selector(toggleMusic))
         audioItem = add("Auto headphones when audio output is active", #selector(toggleAudio))
+        voiceItem = add("Pikachu voice", #selector(toggleVoice))
         soundItem = add("Sounds and purring", #selector(toggleSounds))
         for (name, style) in [("No home",PetHome.none),("Cushion",PetHome.cushion),("Cardboard box",PetHome.box)] {
             let item = add(name,#selector(selectHome(_:))); item.representedObject = style.rawValue; homeItems[style] = item
@@ -838,7 +848,7 @@ final class Companion: NSObject, NSApplicationDelegate {
             if pettingTravel > 55 { petNow(); pettingTravel = 0 }
         } else if !face.contains(point) { pettingTravel = 0 }
         lastMouse = point
-        if life.completeFocus(at: now) { announce("Focus finished. Nice work!",for: 6); play(4,duration: 1.5); playSound(purr: false) }
+        if life.completeFocus(at: now) { announce("Focus finished. Nice work!",for: 6); play(4,duration: 1.5); playSound(purr: false); say("pikachu") }
         if walk.due(at: now,enabled: walkReminders) { remindWalk() }
         if focusReminder.due(at: now,enabled: focusReminders) && life.focusEnd == nil { remindFocus() }
         let sleeping = life.sleeping(at: now,autoSleep: autoSleep && !musicMode && !audioActive)
@@ -851,8 +861,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         if let trip = excursion {
             if now >= trip.start+trip.duration {
                 panel.setFrameOrigin(trip.origin); excursion = nil
-                if trip.kind == .treat { treatPanel?.orderOut(nil); announce("Nom. Acceptable.",for: 2.5); play(0,duration: 1); playSound(purr: true) }
-                else { announce("I meant to miss.",for: 2.5); play(5,duration: 1.2) }
+                if trip.kind == .treat { treatPanel?.orderOut(nil); announce("Nom. Acceptable.",for: 2.5); play(0,duration: 1); playSound(purr: true); say("chaa") }
+                else { announce("I meant to miss.",for: 2.5); play(5,duration: 1.2); say("sleepy") }
             } else {
                 panel.setFrameOrigin(trip.position(at: now))
                 if trip.kind == .treat && now-trip.start > trip.duration*0.45 { treatPanel?.orderOut(nil) }
@@ -864,7 +874,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         }
         if var game = ballGame {
             if !game.finished(at: now) { panel.setFrameOrigin(game.position(at: now)); moveBall(game,at: now) }
-            else if game.returning { panel.setFrameOrigin(game.origin); ballGame = nil; ballPanel?.orderOut(nil); announce("Enough. I win.",for: 2.5); play(0,duration: 1); playSound(purr: true) }
+            else if game.returning { panel.setFrameOrigin(game.origin); ballGame = nil; ballPanel?.orderOut(nil); announce("Enough. I win.",for: 2.5); play(0,duration: 1); playSound(purr: true); say("pika-pika") }
             else if game.runsLeft > 0 { game.run(to: ballTarget(from: game.to,screenOf: game.origin),at: now); ballGame = game }
             else { game.goHome(at: now); ballGame = game }
         }
@@ -939,7 +949,7 @@ final class Companion: NSObject, NSApplicationDelegate {
             let item = NSMenuItem(title: event.message,action: nil,keyEquivalent: "")
             terminalHistory.insertItem(item,at: 0)
             if terminalHistory.items.count > 12 { terminalHistory.removeItem(at: 12) }
-            if event.kind == "attention" { playSound(purr: false) }
+            if event.kind == "attention" { playSound(purr: false); say("pika-question") }
         }
     }
     var seenTerminalEvents: [String] = []
@@ -957,13 +967,13 @@ final class Companion: NSObject, NSApplicationDelegate {
     @objc func petNow() {
         let now = ProcessInfo.processInfo.systemUptime
         pettingUntil = now+2.2; life.activity(at: now)
-        if now-lastPetSound > 3 { lastPetSound = now; playSound(purr: true) }
+        if now-lastPetSound > 3 { lastPetSound = now; playSound(purr: true); say("chaa") }
     }
-    @objc func nap() { life.forcedNap = true; actionUntil = 0; pettingUntil = 0; stretchUntil = 0; typing.until = 0; announce("Nap time",for: 2) }
+    @objc func nap() { life.forcedNap = true; actionUntil = 0; pettingUntil = 0; stretchUntil = 0; typing.until = 0; announce("Nap time",for: 2); say("sleepy") }
     @objc func stretch() {
         let now = ProcessInfo.processInfo.systemUptime
         stretchUntil = now+3; life.nextBreak = now+life.breakInterval
-        announce("Time for a little stretch",for: 5)
+        announce("Time for a little stretch",for: 5); say("sleepy")
     }
     func startTimer(_ seconds: Double) {
         beginDrag(); life.focusEnd = ProcessInfo.processInfo.systemUptime+seconds
@@ -976,11 +986,11 @@ final class Companion: NSObject, NSApplicationDelegate {
     @objc func cancelFocus() { life.focusEnd = nil; life.activity(at: ProcessInfo.processInfo.systemUptime); announce("Focus cancelled") }
     @objc func remindWalk() {
         walkUntil = ProcessInfo.processInfo.systemUptime + 30
-        play(3,duration: 3); playSound(purr: false)
+        play(3,duration: 3); playSound(purr: false); say("pika-pi")
     }
     @objc func remindFocus() {
         focusUntil = ProcessInfo.processInfo.systemUptime + 30
-        play(8,duration: 3); playSound(purr: false)
+        play(8,duration: 3); playSound(purr: false); say("pikachu")
     }
     @objc func toggleFocusReminders() {
         focusReminders.toggle(); focusReminder.next = ProcessInfo.processInfo.systemUptime + 1800
@@ -995,6 +1005,13 @@ final class Companion: NSObject, NSApplicationDelegate {
     @objc func toggleSleep() { autoSleep.toggle(); UserDefaults.standard.set(autoSleep,forKey: "autoSleep"); syncOptions() }
     @objc func toggleMischief() { mischief.toggle(); UserDefaults.standard.set(mischief,forKey: "mischief"); syncOptions() }
     @objc func toggleBreaks() { breakReminders.toggle(); life.nextBreak = ProcessInfo.processInfo.systemUptime+life.breakInterval; UserDefaults.standard.set(breakReminders,forKey: "breakReminders"); syncOptions() }
+    @objc func toggleVoice() { voiceEnabled.toggle(); UserDefaults.standard.set(voiceEnabled,forKey: "voiceEnabled"); if !voiceEnabled { voiceSound?.stop() }; syncOptions() }
+    // One cry at a time; `force` lets Thunderbolt cut in.
+    func say(_ name: String, force: Bool = false) {
+        guard voiceEnabled, let clip = voiceClips[name] else { return }
+        if let current = voiceSound, current.isPlaying { if force { current.stop() } else { return } }
+        clip.stop(); clip.volume = 0.7; clip.play(); voiceSound = clip
+    }
     @objc func toggleSounds() { sounds.toggle(); UserDefaults.standard.set(sounds,forKey: "sounds"); if !sounds { sound?.stop() }; syncOptions() }
     @objc func selectHome(_ sender: NSMenuItem) {
         home = PetHome(rawValue: sender.representedObject as? String ?? "none") ?? .none
@@ -1018,7 +1035,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         focusReminderItem?.state = focusReminders ? .on : .off
         musicItem?.state = musicMode ? .on : .off; audioItem?.state = autoAudio ? .on : .off
         sleepItem?.state = autoSleep ? .on : .off; mischiefItem?.state = mischief ? .on : .off
-        breakItem?.state = breakReminders ? .on : .off; soundItem?.state = sounds ? .on : .off
+        breakItem?.state = breakReminders ? .on : .off; soundItem?.state = sounds ? .on : .off; voiceItem?.state = voiceEnabled ? .on : .off
         for (style,item) in homeItems { item.state = style == home ? .on : .off }
     }
     func clampedOrigin(_ point: NSPoint) -> NSPoint {
@@ -1030,7 +1047,7 @@ final class Companion: NSObject, NSApplicationDelegate {
     func startChase() {
         guard excursion == nil, ballGame == nil else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        life.activity(at: now); lastChase = now
+        life.activity(at: now); lastChase = now; say("pika-question")
         let cursor = NSEvent.mouseLocation
         let dx = cursor.x-panel.frame.midX, dy = cursor.y-panel.frame.midY
         let distance = max(1,hypot(dx,dy)), amount = min(70,distance*0.5)
@@ -1081,7 +1098,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         window.setFrame(NSRect(x: x,y: y,width: size.width,height: size.height),display: false); view.frame = NSRect(origin: .zero,size: size); view.needsDisplay = true
         if !window.isVisible { window.order(.above,relativeTo: panel.windowNumber) }
     }
-    @objc func thunderbolt() { play(8,duration: thunderDuration); announce("Pika… CHUUU!",for: thunderDuration); playSound(purr: false); strikeScreen() }
+    @objc func thunderbolt() { play(8,duration: thunderDuration); announce("Pika… CHUUU!",for: thunderDuration); say("thunderbolt",force: true); strikeScreen() }
     // Full-screen click-through lightning on the screen Pikachu is on, aimed at its head.
     func strikeScreen() {
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(panel.frame.center) }) ?? NSScreen.main else { return }
@@ -1097,13 +1114,13 @@ final class Companion: NSObject, NSApplicationDelegate {
         thunderStart = ProcessInfo.processInfo.systemUptime; view.phase = 0
         sky.order(.above,relativeTo: panel.windowNumber)
     }
-    @objc func dance() { let length = Double(danceFrames.count)*0.14; play(6,duration: length); announce("Dance break",for: length); playSound(purr: true) }
+    @objc func dance() { let length = Double(danceFrames.count)*0.14; play(6,duration: length); announce("Dance break",for: length); playSound(purr: true); say("pika-pika") }
     @objc func playBall() {
         guard excursion == nil, ballGame == nil else { return }
         beginDrag(); let now = ProcessInfo.processInfo.systemUptime; lastChase = now
         var game = BallGame(origin: panel.frame.origin,start: now,runs: Int.random(in: 5...7))
         game.run(to: ballTarget(from: game.origin,screenOf: game.origin),at: now); ballGame = game; showBall(); moveBall(game,at: now)
-        announce("Ball!",for: 2)
+        announce("Ball!",for: 2); say("pika-question")
     }
     func ballTarget(from current: NSPoint, screenOf origin: NSPoint) -> NSPoint {
         // Each run covers 20-30% of the screen width at a random angle, like a screensaver bounce.
@@ -1214,13 +1231,13 @@ final class Companion: NSObject, NSApplicationDelegate {
     @objc func large() { resize(192) }
     @objc func extraLarge() { resize(288) }
     @objc func huge() { resize(384) }
-    @objc func wave() { play(3, duration: 1.0) }
-    @objc func jump() { play(4, duration: 0.85) }
+    @objc func wave() { play(3, duration: 1.0); say("pika") }
+    @objc func jump() { play(4, duration: 0.85); say("pika-pika") }
     @objc func think() { play(7, duration: 2.0) }
     @objc func togglePause() { paused.toggle(); pauseItem.title = paused ? "Resume cursor following" : "Pause cursor following" }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
-        terminalDesk?.shutdown(); timer?.invalidate(); removeKeyMonitors(); sound?.stop()
+        terminalDesk?.shutdown(); timer?.invalidate(); removeKeyMonitors(); sound?.stop(); voiceSound?.stop()
         if let trip = excursion { panel.setFrameOrigin(trip.origin) }
         if let game = ballGame { panel.setFrameOrigin(game.origin) }
         savePosition()
