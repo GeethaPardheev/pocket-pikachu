@@ -216,12 +216,6 @@ final class PetView: NSView {
                 shape.lineWidth = 0.8*sx; shape.stroke()
             }
         }
-        if let text = caption {
-            let area = NSRect(x: 3*sx,y: bounds.height-22*sy,width: bounds.width-6*sx,height: 21*sy)
-            NSColor(calibratedWhite: 0.12, alpha: 0.93).setFill()
-            NSBezierPath(roundedRect: area, xRadius: 7*sx,yRadius: 7*sy).fill()
-            label(text,at: area.insetBy(dx: 2*sx,dy: 3*sy),size: 10*sx,color: .white)
-        }
     }
     func label(_ text: String, at rect: NSRect, size: Double, color: NSColor = .darkGray) {
         let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center
@@ -307,6 +301,47 @@ final class ThunderView: NSView {
                 NSColor(calibratedWhite: 1, alpha: k).setStroke(); path.lineWidth = 2.5; path.stroke()
             }
         }
+    }
+}
+
+final class SpeechBubbleView: NSView {
+    var text = ""
+    var k = 1.0            // pet scale: 1 at width 192
+    var pop = 1.0          // 0 -> 1 with overshoot while appearing
+    var fade = 1.0         // 1 -> 0 while disappearing
+    var bob = 0.0          // vertical wobble in points
+    var tailX = 0.5        // where the tail points, as a fraction of the width
+    static func font(_ k: Double) -> NSFont {
+        let size = 13*k, base = NSFont.systemFont(ofSize: size, weight: .heavy)
+        return NSFont(descriptor: base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor, size: size) ?? base
+    }
+    static func textSize(_ text: String, k: Double, maxWidth: Double) -> NSSize {
+        let rect = (text as NSString).boundingRect(with: NSSize(width: maxWidth, height: 400), options: [.usesLineFragmentOrigin], attributes: [.font: font(k)])
+        return NSSize(width: ceil(rect.width)+2, height: ceil(rect.height))
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.clear.setFill(); bounds.fill()
+        let pad = 11*k, tail = 15*k, line = 2.6*k, shadow = 2.5*k
+        let tip = NSPoint(x: bounds.minX + bounds.width*tailX, y: 0)
+        NSGraphicsContext.saveGraphicsState()
+        // Pop from the tail tip, then bob a little while talking.
+        let t = NSAffineTransform(); t.translateX(by: tip.x, yBy: tip.y + bob); t.scale(by: max(0.01, pop)); t.translateX(by: -tip.x, yBy: -tip.y); t.concat()
+        let box = NSRect(x: line+shadow, y: tail+line, width: bounds.width-2*line-2*shadow, height: bounds.height-tail-2*line-shadow)
+        let radius = 12*k
+        let shape = NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius)
+        let tailPath = NSBezierPath(); tailPath.move(to: NSPoint(x: tip.x-9*k, y: box.minY+2*k)); tailPath.line(to: tip); tailPath.line(to: NSPoint(x: tip.x+9*k, y: box.minY+2*k)); tailPath.close()
+        shape.append(tailPath); shape.windingRule = .nonZero
+        // Soft shadow, Pikachu-yellow body, brown outline, glossy highlight.
+        NSColor(calibratedWhite: 0, alpha: 0.28*fade).setFill(); let sh = NSAffineTransform(); sh.translateX(by: shadow, yBy: -shadow); sh.transform(shape).fill()
+        NSColor(calibratedRed: 0.99, green: 0.85, blue: 0.20, alpha: fade).setFill(); shape.fill()
+        NSColor(calibratedRed: 0.36, green: 0.22, blue: 0.08, alpha: fade).setStroke(); shape.lineWidth = line; shape.lineJoinStyle = .round; shape.stroke()
+        NSColor(calibratedWhite: 1, alpha: 0.45*fade).setFill()
+        NSBezierPath(roundedRect: NSRect(x: box.minX+8*k, y: box.maxY-9*k, width: box.width-16*k, height: 4.5*k), xRadius: 2.2*k, yRadius: 2.2*k).fill()
+        let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping
+        let textRect = box.insetBy(dx: pad, dy: 0)
+        let textHeight = Self.textSize(text, k: k, maxWidth: textRect.width).height
+        (text as NSString).draw(in: NSRect(x: textRect.minX, y: box.midY - textHeight/2 - 1*k, width: textRect.width, height: textHeight), withAttributes: [.font: Self.font(k), .foregroundColor: NSColor(calibratedRed: 0.30, green: 0.17, blue: 0.05, alpha: fade), .paragraphStyle: paragraph])
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 
@@ -531,6 +566,10 @@ final class Companion: NSObject, NSApplicationDelegate {
     var ballGame: BallGame?
     var ballPanel: PetPanel?
     var thunderPanel: PetPanel?
+    var bubblePanel: PetPanel?
+    var bubbleText: String?
+    var bubbleSince = 0.0
+    var bubbleFadeStart = 0.0
     var thunderStart = 0.0
     let thunderDuration = 1.7
     var sounds = false
@@ -718,6 +757,7 @@ final class Companion: NSObject, NSApplicationDelegate {
                 dance(); tick(); precondition(pet.dancing && pet.sprite === images["6-0"])
                 thunderbolt(); tick(); precondition(actionRow == 8 && pet.sprite === images["8-0"] && pet.caption == "Pika… CHUUU!" && thunderPanel?.isVisible == true && (thunderPanel?.contentView as? ThunderView)?.strikes.count == 3)
                 remindFocus(); tick(); precondition(pet.caption == "Hey. Time to focus." && pet.sprite === images["8-0"])
+                precondition(bubblePanel?.isVisible == true && (bubblePanel?.contentView as? SpeechBubbleView)?.text == "Hey. Time to focus." && (bubblePanel?.frame.width ?? 0) > panel.frame.width*0.6)
                 precondition(panel.frame.width == 384 || panel.frame.width == 192)
                 huge(); precondition(panel.frame.width == 384 && pet.frame.width == 384)
                 showBall(); moveBall(BallGame(origin: panel.frame.origin,start: 0,runs: 1),at: 0); precondition(ballPanel?.frame.width == 84 && ballPanel?.frame.height == 76); ballPanel?.orderOut(nil)
@@ -870,6 +910,7 @@ final class Companion: NSObject, NSApplicationDelegate {
         pet.mirrored = row != 1 && row != 2 && panel.frame.midX < screenMidX   // running rows already carry their direction
         // Music mode swaps in the headphone render when one exists for this frame.
         pet.sprite = (pet.headphones ? images["h\(row)-\(col)"] : nil) ?? images["\(row)-\(col)"]
+        updateBubble(pet.caption, at: now)
     }
     @objc func toggleTerminal() {
         terminalEnabled.toggle(); UserDefaults.standard.set(terminalEnabled,forKey: "terminalEnabled")
@@ -1011,6 +1052,34 @@ final class Companion: NSObject, NSApplicationDelegate {
         window.setFrameOrigin(NSPoint(x: x,y: max(f.minY,panel.frame.minY+10)))
         window.orderFrontRegardless(); treatExpires = ProcessInfo.processInfo.systemUptime+20
         announce("Click the fish",for: 3)
+    }
+    // Speech bubble above the head: pops in on new text, bobs while shown, fades for 0.25 s after the text goes away.
+    func updateBubble(_ text: String?, at now: Double) {
+        if let text = text, text != bubbleText { bubbleText = text; bubbleSince = now; bubbleFadeStart = 0 }
+        if text == nil, bubbleText != nil, bubbleFadeStart == 0 { bubbleFadeStart = now }
+        guard let shown = bubbleText else { bubblePanel?.orderOut(nil); return }
+        let fade = bubbleFadeStart == 0 ? 1.0 : max(0, 1 - (now-bubbleFadeStart)/0.25)
+        if fade == 0 { bubbleText = nil; bubbleFadeStart = 0; bubblePanel?.orderOut(nil); return }
+        if bubblePanel == nil {
+            let window = PetPanel(contentRect: .zero,styleMask: [.borderless,.nonactivatingPanel],backing: .buffered,defer: false)
+            window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = false; window.level = .floating; window.ignoresMouseEvents = true
+            window.hidesOnDeactivate = false; window.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]; window.isReleasedWhenClosed = false
+            window.contentView = SpeechBubbleView(frame: .zero); bubblePanel = window
+        }
+        guard let window = bubblePanel, let view = window.contentView as? SpeechBubbleView else { return }
+        let k = panel.frame.width/192, age = now-bubbleSince
+        let textSize = SpeechBubbleView.textSize(shown, k: k, maxWidth: panel.frame.width*1.5)
+        let size = NSSize(width: textSize.width+2*11*k+2*2.6*k+2*2.5*k+2, height: textSize.height+2*8*k+15*k+2*2.6*k+2.5*k+8*k)
+        // Tail tip sits just above the head, toward the side the face is on.
+        let tipX = panel.frame.midX + (pet.mirrored ? 0.08 : -0.08)*panel.frame.width, tipY = panel.frame.maxY - 0.10*panel.frame.height
+        let screen = (NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main)?.visibleFrame ?? panel.frame
+        var x = tipX - size.width/2; x = min(max(screen.minX, x), screen.maxX-size.width)
+        let y = min(tipY, screen.maxY-size.height)
+        view.text = shown; view.k = k; view.fade = fade; view.tailX = (tipX-x)/size.width
+        view.pop = age < 0.5 ? 1 - exp(-age*14)*cos(age*22) : 1
+        view.bob = age < 0.5 ? 0 : sin(now*4)*1.5*k
+        window.setFrame(NSRect(x: x,y: y,width: size.width,height: size.height),display: false); view.frame = NSRect(origin: .zero,size: size); view.needsDisplay = true
+        if !window.isVisible { window.order(.above,relativeTo: panel.windowNumber) }
     }
     @objc func thunderbolt() { play(8,duration: thunderDuration); announce("Pika… CHUUU!",for: thunderDuration); playSound(purr: false); strikeScreen() }
     // Full-screen click-through lightning on the screen Pikachu is on, aimed at its head.

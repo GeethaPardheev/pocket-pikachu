@@ -60,6 +60,7 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 - **Homes.** Cushion, cardboard box, or none. Pikachu settles into the box when sleeping or being petted.
 - **Headphones.** Pikachu puts on a pair of black over-ear headphones while your Mac is playing audio (it can't tell music from notifications), or when you turn on music mode. They show in the idle and typing poses; other poses play without them.
 - **Sounds.** Optional purr and chime, off by default.
+- **Speech.** Whatever Pikachu says appears in a yellow comic speech bubble above its head. It pops in with a bounce, bobs while shown, fades out, and scales with Pikachu's size.
 - **Facing.** Pikachu always faces into the screen: on the left half of the display its poses are mirrored to face right.
 - **Size.** Small, Large (the default), Extra large, Huge. A chosen size lasts for the session. **Reset position** brings Pikachu back on screen.
 - **Cursor tracking.** This sprite set has no head-turn frames, so Pikachu idles and blinks instead of following the pointer. **Pause cursor following** therefore has no visible effect.
