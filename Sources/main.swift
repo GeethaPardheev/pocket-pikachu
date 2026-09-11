@@ -151,6 +151,7 @@ final class PetView: NSView {
     var happy = false
     var stretching = false
     var dancing = false
+    var mirrored = false
     var headphones = false
     var gazeDirection: Int? = nil
     var clock = 0.0
@@ -182,7 +183,11 @@ final class PetView: NSView {
             let lift = max(0, sin(clock*2.5))
             body.size.height -= 8*sy; body.origin.y += lift*6*sy
         }
+        NSGraphicsContext.saveGraphicsState()
+        // Poses face left; on the left half of the screen flip them so Pikachu faces into the screen.
+        if mirrored { let flip = NSAffineTransform(); flip.translateX(by: bounds.width, yBy: 0); flip.scaleX(by: -1, yBy: 1); flip.concat() }
         sprite?.draw(in: body, from: .zero, operation: .sourceOver, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
         if home == .box {
             NSColor(calibratedRed: 0.76, green: 0.54, blue: 0.32, alpha: 1).setFill()
             NSBezierPath(roundedRect: NSRect(x: 10*sx,y: 0,width: 172*sx,height: 39*sy),xRadius: 3*sx,yRadius: 3*sy).fill()
@@ -669,6 +674,10 @@ final class Companion: NSObject, NSApplicationDelegate {
                 large(); precondition(pet.frame.width == 192)
                 previewTyping(); tick(); precondition((0..<8).contains { pet.sprite === images["9-\($0)"] } && pet.typingPhase == nil)
                 toggleMusic(); tick(); precondition((0..<8).contains { pet.sprite === images["h9-\($0)"] }); typing.until = 0; tick(); precondition((0..<6).contains { pet.sprite === images["h0-\($0)"] }); toggleMusic()
+                let area = (NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main)!.frame
+                panel.setFrameOrigin(NSPoint(x: area.minX+10,y: panel.frame.minY)); tick(); precondition(pet.mirrored)
+                panel.setFrameOrigin(NSPoint(x: area.maxX-panel.frame.width-10,y: panel.frame.minY)); tick(); precondition(!pet.mirrored)
+                panel.setFrameOrigin(home)
                 print("PASS: ball game ran \(runs) runs of 20-30% of \(Int(width)) px, roamed up to \(Int(reach)) px from home, and came home; dance frames and bounce; focus reminder caption")
                 NSApp.terminate(nil)
             }
@@ -803,6 +812,8 @@ final class Companion: NSObject, NSApplicationDelegate {
         if now < focusUntil { pet.caption = "Hey. Time to focus." }
         pet.dancing = dancing
         pet.gazeDirection = nil
+        let screenMidX = (NSScreen.screens.first { $0.frame.contains(panel.frame.center) } ?? NSScreen.main)?.frame.midX ?? panel.frame.midX
+        pet.mirrored = row != 1 && row != 2 && panel.frame.midX < screenMidX   // running rows already carry their direction
         // Music mode swaps in the headphone render when one exists for this frame.
         pet.sprite = (pet.headphones ? images["h\(row)-\(col)"] : nil) ?? images["\(row)-\(col)"]
     }
