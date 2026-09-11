@@ -39,7 +39,7 @@ Everything is in the right-click menu, or under the tail icon in the menu bar.
 
 - **Play ball.** A Poké Ball appears at its paws. Pikachu swats it, the ball rolls off spinning and slowing down, and Pikachu gallops after it. Five to seven rolls per game, each 20–30% of the screen width in a random direction, then it trots back to exactly where it started. Dragging Pikachu or starting a focus session ends the game.
 - **Fun dance.** Eight seconds of bouncing through every pose in the sprite set.
-- **Thunderbolt.** A two-second attack with a “Pika… CHUUU!” caption. Lightning strikes down the whole screen onto Pikachu, three flashes on a click-through overlay, so it never gets in the way of your work. The focus reminder plays the pose without the screen flash.
+- **Thunderbolt.** A two-second attack with a “Pika… CHUUU!” caption. The screen darkens like a storm, sparks crackle around Pikachu, then three branching lightning bolts strike down the whole screen onto it with flickering flashes, an impact glow, flying sparks, a thunder rumble and a little screen shake, all timed to the cry. It's a click-through overlay, so it never gets in the way of your work. The focus reminder plays the pose without the screen flash.
 - **Play with cursor.** A short chase toward the pointer. Pikachu also does this on its own when the cursor moves nearby, at most once every 75 seconds. **Occasional cursor play** turns that off.
 - **Give a fish treat.** A fish appears; click it and Pikachu pounces on it and comes back. Uneaten fish vanish after 20 seconds.
 - **Pet Pocket Pikachu**, or rub the pointer over its head, for closed eyes and a heart.
